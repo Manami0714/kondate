@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest';
+import type { Stock } from '../db/types';
+import { sequentialIds } from './id';
+import { addStock, changeStock, removeStock, setStockAmount } from './stock';
+
+// テスト用の固定の日付(地域時刻で作る)
+const day1 = new Date(2026, 8, 25, 10, 0, 0);
+const day2 = new Date(2026, 8, 27, 18, 30, 0);
+const day3 = new Date(2026, 9, 1, 9, 0, 0);
+
+describe('在庫の追加', () => {
+  it('在庫がない食材を追加すると、今日の日付で在庫ができ、「購入」の動きが残る', () => {
+    const r = addStock(null, 'egg', 10, day1, sequentialIds());
+    expect(r.stock).toEqual({ foodId: 'egg', amount: 10, addedDate: '2026-09-25' });
+    expect(r.move).toEqual({
+      id: 'id-1',
+      at: day1.toISOString(),
+      foodId: 'egg',
+      delta: 10,
+      reason: '購入',
+      mealSetId: null,
+    });
+  });
+
+  it('在庫が残っているうちに買い足しても、追加日は変わらない', () => {
+    const current: Stock = { foodId: 'egg', amount: 3, addedDate: '2026-09-25' };
+    const r = addStock(current, 'egg', 10, day2, sequentialIds());
+    expect(r.stock).toEqual({ foodId: 'egg', amount: 13, addedDate: '2026-09-25' });
+    expect(r.move?.delta).toBe(10);
+  });
+
+  it('0になって消えたあとに再び追加すると、新しい日付になる', () => {
+    const ids = sequentialIds();
+    const first = addStock(null, 'egg', 2, day1, ids);
+    const gone = changeStock({ current: first.stock, foodId: 'egg', delta: -2, reason: '夕飯', now: day2, newId: ids });
+    expect(gone.stock).toBeNull();
+    const again = addStock(gone.stock, 'egg', 6, day3, ids);
+    expect(again.stock?.addedDate).toBe('2026-10-01');
+  });
+
+  it('0以下の量は追加できない', () => {
+    expect(() => addStock(null, 'egg', 0, day1, sequentialIds())).toThrow();
+    expect(() => addStock(null, 'egg', -1, day1, sequentialIds())).toThrow();
+  });
+});
+
+describe('在庫の減少と手直し', () => {
+  it('減らすと量が減り、動きには負の数が残る', () => {
+    const current: Stock = { foodId: 'cabbage', amount: 1, addedDate: '2026-09-25' };
+    const r = changeStock({ current, foodId: 'cabbage', delta: -0.25, reason: '昼食', now: day2, newId: sequentialIds() });
+    expect(r.stock).toEqual({ foodId: 'cabbage', amount: 0.75, addedDate: '2026-09-25' });
+    expect(r.move?.delta).toBe(-0.25);
+    expect(r.move?.reason).toBe('昼食');
+  });
+
+  it('0になったら在庫から消える', () => {
+    const current: Stock = { foodId: 'cabbage', amount: 0.5, addedDate: '2026-09-25' };
+    const r = changeStock({ current, foodId: 'cabbage', delta: -0.5, reason: '夕飯', now: day2, newId: sequentialIds() });
+    expect(r.stock).toBeNull();
+    expect(r.move?.delta).toBe(-0.5);
+  });
+
+  it('在庫より多く減らしても0で止まり、動きには実際に減った量が残る', () => {
+    const current: Stock = { foodId: 'egg', amount: 2, addedDate: '2026-09-25' };
+    const r = changeStock({ current, foodId: 'egg', delta: -5, reason: '夕飯', now: day2, newId: sequentialIds() });
+    expect(r.stock).toBeNull();
+    expect(r.move?.delta).toBe(-2);
+  });
+
+  it('量を手で直すと「手直し」として差分が残り、追加日は変わらない', () => {
+    const current: Stock = { foodId: 'egg', amount: 10, addedDate: '2026-09-25' };
+    const r = setStockAmount(current, 'egg', 7, day2, sequentialIds());
+    expect(r.stock).toEqual({ foodId: 'egg', amount: 7, addedDate: '2026-09-25' });
+    expect(r.move).toMatchObject({ delta: -3, reason: '手直し' });
+  });
+
+  it('同じ量に直したときは動きを残さない', () => {
+    const current: Stock = { foodId: 'egg', amount: 10, addedDate: '2026-09-25' };
+    const r = setStockAmount(current, 'egg', 10, day2, sequentialIds());
+    expect(r.stock).toBe(current);
+    expect(r.move).toBeNull();
+  });
+
+  it('削除すると在庫が消え、残っていた量がすべて減った動きが残る', () => {
+    const current: Stock = { foodId: 'egg', amount: 4, addedDate: '2026-09-25' };
+    const r = removeStock(current, day2, sequentialIds());
+    expect(r.stock).toBeNull();
+    expect(r.move).toMatchObject({ delta: -4, reason: '手直し' });
+  });
+
+  it('小数の誤差が出ない(0.1 + 0.2 = 0.3)', () => {
+    const ids = sequentialIds();
+    const a = addStock(null, 'x', 0.1, day1, ids);
+    const b = addStock(a.stock, 'x', 0.2, day1, ids);
+    expect(b.stock?.amount).toBe(0.3);
+  });
+
+  it('在庫の動きを逆に足すと、元の量に戻る', () => {
+    const ids = sequentialIds();
+    const start: Stock = { foodId: 'egg', amount: 3, addedDate: '2026-09-25' };
+    const used = changeStock({ current: start, foodId: 'egg', delta: -5, reason: '夕飯', now: day2, newId: ids });
+    const back = changeStock({
+      current: used.stock,
+      foodId: 'egg',
+      delta: -(used.move?.delta ?? 0),
+      reason: 'キャンセルで戻す',
+      now: day2,
+      newId: ids,
+    });
+    expect(back.stock?.amount).toBe(3);
+  });
+});

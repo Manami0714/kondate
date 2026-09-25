@@ -1,0 +1,14 @@
+node_modules
+dist
+dev-dist
+*.local
+.vscode
+.claude/settings.local.json
+.idea
+.DS_Store
+Thumbs.db
+
+# 実際のレシートや書き出したデータはコミットしない
+samples/
+*.backup.json
+kondate-backup-*.json
