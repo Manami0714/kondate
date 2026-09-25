@@ -11,15 +11,21 @@ import { formatShortDate } from '../logic/date';
 import { parseAmount } from '../logic/forms';
 import { amountToInput, formatAmount } from '../logic/format';
 import { LunchSheet } from './stock/LunchSheet';
+import { PasteSheet } from './stock/PasteSheet';
 
-type Mode = { type: 'none' } | { type: 'lunch' } | { type: 'pick' } | { type: 'add'; food: Food } | { type: 'edit'; food: Food; stock: Stock };
+type Mode =
+  | { type: 'none' }
+  | { type: 'paste' }
+  | { type: 'lunch' }
+  | { type: 'pick' } | { type: 'add'; food: Food } | { type: 'edit'; food: Food; stock: Stock };
 
 export function StockScreen() {
   const foodData = useFoods();
   const stocks = useLiveQuery(() => db.stocks.toArray(), []);
+  const ignoredWords = useLiveQuery(() => db.ignoredWords.toArray(), []);
   const [mode, setMode] = useState<Mode>({ type: 'none' });
 
-  if (!foodData || !stocks) return <p className="muted">読み込み中…</p>;
+  if (!foodData || !stocks || !ignoredWords) return <p className="muted">読み込み中…</p>;
   const { foods, byId } = foodData;
   const stockById = new Map(stocks.map((s) => [s.foodId, s]));
 
@@ -34,14 +40,17 @@ export function StockScreen() {
     <>
       <div className="screen-header">
         <h1 className="screen-title">在庫</h1>
-        <div className="header-actions">
-          <button type="button" className="btn" onClick={() => setMode({ type: 'lunch' })}>
-            昼に使った
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'pick' })}>
-            ＋ 追加
-          </button>
-        </div>
+        <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'pick' })}>
+          ＋ 追加
+        </button>
+      </div>
+      <div className="btn-row" style={{ marginBottom: 12 }}>
+        <button type="button" className="btn" onClick={() => setMode({ type: 'paste' })}>
+          貼り付けで追加
+        </button>
+        <button type="button" className="btn" onClick={() => setMode({ type: 'lunch' })}>
+          昼に使った
+        </button>
       </div>
 
       {rows.length === 0 ? (
@@ -63,7 +72,9 @@ export function StockScreen() {
         </ul>
       )}
 
-      {mode.type === 'lunch' && <LunchSheet foods={foods} byId={byId} stocks={stocks} onClose={close} />}
+      {mode.type === 'paste' && <PasteSheet foods={foods} byId={byId} ignoredWords={ignoredWords} onClose={close} />}
+
+      {mode.type === 'lunch' &&<LunchSheet foods={foods} byId={byId} stocks={stocks} onClose={close} />}
 
       {mode.type === 'pick' && (
         <Sheet title="食材を選ぶ" onClose={close}>

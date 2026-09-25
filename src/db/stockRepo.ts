@@ -1,7 +1,7 @@
 // 在庫の変更をデータベースに保存する
 // 計算は logic/stock.ts の純粋関数に任せ、ここでは在庫と在庫の動きを同時に書き込むだけ
 import type { KondateDB } from './db';
-import type { Food, Stock } from './types';
+import type { Food, IgnoredWord, Stock } from './types';
 import { addStock, changeStock, setStockAmount, type StockChange } from '../logic/stock';
 import { randomId, type IdGenerator } from '../logic/id';
 
@@ -32,6 +32,32 @@ export function setStockAmountInDb(db: KondateDB, foodId: string, amount: number
 
 export function removeStockFromDb(db: KondateDB, foodId: string, now: Date, newId: IdGenerator = randomId) {
   return setStockAmountInDb(db, foodId, 0, now, newId);
+}
+
+/**
+ * レシート・ネットスーパーで買った食材を在庫に足し(理由:購入)、
+ * 確認画面で直した別名と、「食材ではない」を選んだ読まない言葉を保存する。
+ * 1つのトランザクションで行うので、途中で失敗したら何も変わらない
+ */
+export async function addPurchasesInDb(
+  db: KondateDB,
+  items: readonly { foodId: string; amount: number }[],
+  updatedFoods: readonly Food[],
+  ignoredWords: { add: readonly IgnoredWord[]; remove: readonly string[] },
+  now: Date,
+  newId: IdGenerator = randomId,
+): Promise<void> {
+  await db.transaction('rw', [db.stocks, db.stockMoves, db.foods, db.ignoredWords], async () => {
+    if (updatedFoods.length > 0) await db.foods.bulkPut([...updatedFoods]);
+    // 「食材ではない」から食材に選び直した品は、読まない言葉から外す
+    if (ignoredWords.remove.length > 0) await db.ignoredWords.bulkDelete([...ignoredWords.remove]);
+    if (ignoredWords.add.length > 0) await db.ignoredWords.bulkPut([...ignoredWords.add]);
+    for (const item of items) {
+      if (!(item.amount > 0)) continue;
+      const current = (await db.stocks.get(item.foodId)) ?? null;
+      await saveChange(db, item.foodId, addStock(current, item.foodId, item.amount, now, newId));
+    }
+  });
 }
 
 /**

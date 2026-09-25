@@ -279,3 +279,37 @@ describe('フェーズ3:昼食・評価・お気に入り・読まない言葉�
     expect(await db.readAll()).toEqual(before);
   });
 });
+
+describe('フェーズ3:貼り付けの保存', () => {
+  it('買った食材を「購入」として足し、直した別名と読まない言葉を保存・外せる', async () => {
+    const { addPurchasesInDb } = await import('./stockRepo');
+    const { withAlias } = await import('../logic/aliases');
+    const { makeIgnoredWord } = await import('../logic/receipt/ignoredWord');
+    const db = freshDb();
+    const ids = sequentialIds();
+    await addStockToDb(db, 'egg', 2, day1, ids);
+    await db.ignoredWords.add({ word: 'ムカシ', label: 'むかし', addedAt: day1.toISOString() });
+
+    const loin = (await db.foods.get('pork_loin'))!;
+    const updated = withAlias(loin, '産地直送豚肩ロース切りおとし', await db.foods.toArray())!;
+    const ignored = makeIgnoredWord('ふんわりトイレットロール', day2)!;
+    await addPurchasesInDb(
+      db,
+      [{ foodId: 'egg', amount: 10 }, { foodId: 'pork_loin', amount: 250 }],
+      [updated],
+      { add: [ignored], remove: ['ムカシ'] },
+      day2,
+      ids,
+    );
+
+    expect(await db.stocks.get('egg')).toMatchObject({ amount: 12, addedDate: '2026-09-25' });
+    expect(await db.stocks.get('pork_loin')).toMatchObject({ amount: 250, addedDate: '2026-09-26' });
+    expect((await db.foods.get('pork_loin'))?.aliases).toContain('産地直送豚肩ロース切りおとし');
+    expect((await db.ignoredWords.toArray()).map((w) => w.label)).toEqual(['ふんわりトイレットロール']);
+    const bought = (await db.stockMoves.toArray()).filter((m) => m.at === day2.toISOString());
+    expect(bought.map((m) => [m.foodId, m.delta, m.reason])).toEqual([
+      ['egg', 10, '購入'],
+      ['pork_loin', 250, '購入'],
+    ]);
+  });
+});

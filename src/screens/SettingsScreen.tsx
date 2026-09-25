@@ -1,6 +1,7 @@
 import { useFoods } from '../hooks/useFoods';
 import { BackupSection } from './settings/BackupSection';
 import { FeedbackSection } from './settings/FeedbackSection';
+import { IgnoredWordsSection } from './settings/IgnoredWordsSection';
 import { FoodDictionarySection } from './settings/FoodDictionarySection';
 import { HouseholdSection } from './settings/HouseholdSection';
 import { PantrySection } from './settings/PantrySection';
@@ -18,6 +19,7 @@ export function SettingsScreen() {
       <FoodDictionarySection foods={foodData.foods} />
       <HouseholdSection />
       <FeedbackSection byId={foodData.byId} />
+      <IgnoredWordsSection />
       <BackupSection />
     </>
   );
