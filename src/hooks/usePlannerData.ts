@@ -40,7 +40,7 @@ export function usePlannerData(today: DateString): PlannerSource | undefined {
       membersById: new Map(raw.members.map((m) => [m.id, m])),
       household: raw.household,
       feedbacks: raw.feedbacks,
-      history: cookedHistory(raw.mealSets, today),
+      history: cookedHistory(raw.mealSets),
     };
     return { data, members: raw.members, mealSets: raw.mealSets, foodsById };
   }, [raw, today]);

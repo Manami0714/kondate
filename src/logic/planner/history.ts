@@ -5,16 +5,16 @@ import { diffDays } from '../date';
 import type { HistoryEntry } from './types';
 
 /**
- * 献立セットから「作った」とみなす料理を集める。
- * 「作った」の1食に加え、「作った」を押さないまま日付が過ぎた「予定」の1食も数える(キャンセルは数えない)
+ * 献立セットから「作った」とみなす料理を集める(「最近作った料理」と「調理法の頻度」に使う)。
+ * 「作った」の1食に加え、まだ「作った」を押していない「予定」の1食も、日付が過ぎたものもこれからのものも数える。
+ * キャンセルは数えない
  */
-export function cookedHistory(mealSets: readonly MealSet[], today: DateString): HistoryEntry[] {
+export function cookedHistory(mealSets: readonly MealSet[]): HistoryEntry[] {
   const entries: HistoryEntry[] = [];
   for (const set of mealSets) {
     if (set.status === 'キャンセル') continue;
     for (const day of set.days) {
-      const cooked = day.status === '作った' || (day.status === '予定' && day.date < today);
-      if (!cooked) continue;
+      if (day.status === 'キャンセル') continue;
       for (const recipeId of [day.mainId, day.sideId, day.soupId]) entries.push({ date: day.date, recipeId });
     }
   }

@@ -176,3 +176,37 @@ describe('献立の確定・キャンセルの保存', () => {
     expect(reasons).toEqual(new Set(['購入', '夕飯', 'キャンセルで戻す']));
   });
 });
+
+describe('確定前の提案(下書き)', () => {
+  it('保存して読み直せる。確定すると消える。書き出しには含めない', async () => {
+    const { saveDraft, loadDraft, deleteDraft } = await import('./draftRepo');
+    const { confirmPlanToDb } = await import('./mealSetRepo');
+    const { plannerData, member, conditions, days } = await import('../logic/planner/testing');
+    const db = freshDb();
+    const planned = days(['a']).map((d) => ({ ...d, mainId: 'init_nikujaga', sideId: 'init_kinpira', soupId: 'init_tonjiru', overLimit: false }));
+    const draft = {
+      savedAt: day1.toISOString(),
+      startDate: planned[0].date,
+      conditions: conditions('ふつう'),
+      addedGuests: [],
+      guests: [],
+      days: planned,
+      shown: { '0-mainId': ['init_ginger_pork'] },
+    };
+
+    await saveDraft(db, draft);
+    expect(await loadDraft(db)).toEqual({ ...draft, id: 'draft' });
+    expect(Object.keys(await db.readAll())).not.toContain('planDrafts');
+
+    // 「条件からやり直す」で消す
+    await deleteDraft(db);
+    expect(await loadDraft(db)).toBeNull();
+
+    // 確定で消す
+    await saveDraft(db, draft);
+    const data = plannerData({ recipes: await db.recipes.toArray(), members: [member('a')] });
+    await confirmPlanToDb(db, { id: 's1', startDate: draft.startDate, days: planned, conditions: draft.conditions, guests: [], data, now: day1, newId: sequentialIds() });
+    expect(await loadDraft(db)).toBeNull();
+    expect(await db.mealSets.count()).toBe(1);
+  });
+});

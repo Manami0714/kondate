@@ -31,6 +31,7 @@ describe('必ず外す条件:アレルギー', () => {
       recipe('egg_main', '主菜', [['egg', 4, true]], { favorite: true }),
       recipe('pork_main', '主菜', [['pork_koma', 200, true]]),
       recipe('fish_main', '主菜', [['salmon', 2, true]]),
+      recipe('chicken_main', '主菜', [['chicken_thigh', 200, true]]),
       ...fillerSidesAndSoups(),
     ];
     const data = plannerData({
@@ -49,6 +50,7 @@ describe('必ず外す条件:アレルギー', () => {
       recipe('soy_main', '主菜', [['pork_koma', 200, true], ['soy_sauce', 2]], { favorite: true }),
       recipe('salt_main', '主菜', [['salmon', 2, true], ['salt', 0.5]]),
       recipe('salt_main2', '主菜', [['chicken_thigh', 200, true], ['salt', 0.5]]),
+      recipe('salt_main3', '主菜', [['cod', 2, true], ['salt', 0.5]]),
       ...fillerSidesAndSoups(),
     ];
     const data = plannerData({
@@ -96,6 +98,7 @@ describe('必ず外す条件:食後の嫌い', () => {
     recipe('r_flavor', '主菜', [['mackerel', 2, true]], { favorite: true, flavors: ['胡麻'] }),
     recipe('ok1', '主菜', [['chicken_thigh', 200, true]]),
     recipe('ok2', '主菜', [['cod', 2, true]]),
+    recipe('ok3', '主菜', [['pork_loin', 200, true]]),
     ...fillerSidesAndSoups(),
   ];
   const feedbacks = [
@@ -119,8 +122,8 @@ describe('必ず外す条件:食後の嫌い', () => {
       members: [member('a')],
       feedbacks: [feedback('レシピ', 'only', '提案時の嫌い')],
     });
-    const plan = planOrThrow({ days: days(['a']), conditions: conditions() }, data, seededRng(1));
-    expect(plan.every((d) => d.mainId === 'only')).toBe(true);
+    const plan = planOrThrow({ days: days(['a']).slice(0, 1), conditions: conditions() }, data, seededRng(1));
+    expect(plan[0].mainId).toBe('only');
   });
 });
 
@@ -128,6 +131,7 @@ describe('必ず外す条件:時間・難易度', () => {
   const recipes = [
     recipe('quick', '主菜', [['pork_koma', 200, true]], { minutes: 15, difficulty: 1 }),
     recipe('quick2', '主菜', [['salmon', 2, true]], { minutes: 20, difficulty: 1 }),
+    recipe('quick3', '主菜', [['pork_loin', 200, true]], { minutes: 10, difficulty: 1 }),
     recipe('mid', '主菜', [['chicken_thigh', 200, true]], { minutes: 40, difficulty: 2, favorite: true }),
     recipe('long', '主菜', [['beef_koma', 200, true]], { minutes: 60, difficulty: 3, favorite: true }),
     recipe('hard_quick', '主菜', [['cod', 2, true]], { minutes: 10, difficulty: 3, favorite: true }),
@@ -177,6 +181,7 @@ describe('必ず外す条件:同じ1食の中で主な材料がかぶらない',
     const recipes = [
       recipe('cab_main', '主菜', [['cabbage', 0.25, true], ['pork_bara', 150, true], ['ginger', 1]], { favorite: true }),
       recipe('tofu_main', '主菜', [['tofu', 1, true], ['green_onion', 0.5]]),
+      recipe('fish_main', '主菜', [['salmon', 2, true], ['ginger', 0.5]]),
       recipe('cab_side', '副菜', [['cabbage', 0.25, true], ['ginger', 0.5]], { favorite: true }),
       recipe('tofu_side', '副菜', [['tofu', 0.5, true]], { favorite: true }),
       recipe('carrot_side', '副菜', [['carrot', 1, true], ['cabbage', 0.1]]),
@@ -209,12 +214,15 @@ describe('買い足しの上限', () => {
     recipe('many', '主菜', [['pork_koma', 200, true], ['onion', 1], ['carrot', 1], ['potato', 2]], { favorite: true }),
     recipe('stocked', '主菜', [['chicken_thigh', 200, true]]),
     recipe('stocked2', '主菜', [['salmon', 2, true]]),
+    recipe('stocked3', '主菜', [['cod', 2, true]]),
     recipe('side_stocked', '副菜', [['spinach', 1, true]]),
     recipe('side_stocked2', '副菜', [['komatsuna', 1, true]]),
+    recipe('side_stocked3', '副菜', [['okra', 4, true]]),
     recipe('soup_stocked', '汁物', [['wakame', 2, true]]),
     recipe('soup_stocked2', '汁物', [['enoki', 1, true]]),
+    recipe('soup_stocked3', '汁物', [['shimeji', 1, true]]),
   ];
-  const stocks = ['chicken_thigh', 'salmon', 'spinach', 'komatsuna', 'wakame', 'enoki'].map((foodId) => ({
+  const stocks = ['chicken_thigh', 'salmon', 'cod', 'spinach', 'komatsuna', 'okra', 'wakame', 'enoki', 'shimeji'].map((foodId) => ({
     foodId,
     amount: 1000,
     addedDate: '2026-09-24',
@@ -322,5 +330,64 @@ describe('初期レシピで組む', () => {
       expect(plan.every((d) => !d.overLimit)).toBe(true);
       for (const d of summarizePlan(plan, data).days) expect(d.shopping.size).toBeLessThanOrEqual(2);
     }
+  });
+});
+
+describe('同じ献立セットの中で同じレシピは出さない', () => {
+  it('在庫がそろっていてお気に入りでも、3日で同じ料理は1回だけ', () => {
+    const recipes = [
+      recipe('chanchan', '主菜', [['salmon', 2, true], ['cabbage', 0.2]], { favorite: true }),
+      recipe('m2', '主菜', [['pork_koma', 200, true]]),
+      recipe('m3', '主菜', [['chicken_thigh', 200, true]]),
+      ...fillerSidesAndSoups(),
+    ];
+    const data = plannerData({
+      recipes,
+      members: [member('a')],
+      stocks: [
+        { foodId: 'salmon', amount: 20, addedDate: '2026-09-23' },
+        { foodId: 'cabbage', amount: 3, addedDate: '2026-09-23' },
+      ],
+    });
+    for (const seed of SEEDS) {
+      const plan = planOrThrow({ days: days(['a']), conditions: conditions() }, data, seededRng(seed));
+      const ids = allIds(plan);
+      expect(new Set(ids).size, ids.join(',')).toBe(ids.length);
+    }
+  });
+
+  it('候補が足りなくて3日分を組めなければ、理由を返す', () => {
+    const data = plannerData({
+      recipes: [recipe('a', '主菜', [['salmon', 2, true]]), recipe('b', '主菜', [['pork_koma', 200, true]]), ...fillerSidesAndSoups()],
+      members: [member('a')],
+    });
+    const r = makePlan({ days: days(['a']), conditions: conditions() }, data, seededRng(1));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain('同じ料理を2回使わず');
+  });
+
+  it('まだ「作った」を押していない前の献立セットの料理は、最近作った料理として出にくい', async () => {
+    const { cookedHistory } = await import('./history');
+    const recipes = [
+      recipe('prev', '主菜', [['salmon', 2, true]], { favorite: true }),
+      recipe('m2', '主菜', [['pork_koma', 200, true]]),
+      ...fillerSidesAndSoups(),
+    ];
+    const base = plannerData({ recipes, members: [member('a')] });
+    const prevSet = {
+      id: 'prev_set',
+      startDate: '2026-09-25',
+      days: [{ date: '2026-09-27', mainId: 'prev', sideId: 'side_a', soupId: 'soup_a', memberIds: ['a'], status: '予定' as const }],
+      status: '予定' as const,
+      reserved: [],
+      conditions: conditions(),
+      guests: [],
+      shopping: [],
+      overLimitDays: [],
+    };
+    const req = { days: days(['a'], '2026-09-28').slice(0, 1), conditions: conditions() };
+    expect(planOrThrow(req, base, () => 0)[0].mainId).toBe('prev'); // 履歴がなければお気に入りが選ばれる
+    const withPrev = { ...base, history: cookedHistory([prevSet]) };
+    expect(planOrThrow(req, withPrev, () => 0)[0].mainId).toBe('m2');
   });
 });

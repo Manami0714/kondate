@@ -19,6 +19,7 @@ import type {
   HouseholdPrefs,
   MealSet,
   Member,
+  PlanDraft,
   PantryItem,
   Recipe,
   Stock,
@@ -35,6 +36,8 @@ export class KondateDB extends Dexie {
   mealSets!: EntityTable<MealSet, 'id'>;
   stockMoves!: EntityTable<StockMove, 'id'>;
   feedbacks!: EntityTable<Feedback, 'id'>;
+  /** 確定前の献立の提案(下書き)。書き出し・読み込みの対象外 */
+  planDrafts!: EntityTable<PlanDraft, 'id'>;
 
   constructor(name = 'kondate') {
     super(name);
@@ -68,6 +71,9 @@ export class KondateDB extends Dexie {
       await tx.table('foods').bulkAdd(missing.foods);
       await tx.table('recipes').bulkAdd(missing.recipes);
     });
+
+    // 版3:確定前の献立の提案(下書き)を保存する表を足す
+    this.version(3).stores({ planDrafts: 'id' });
 
     // データベースを初めて作ったときだけ、初期データを入れる
     this.on('populate', (tx) => {

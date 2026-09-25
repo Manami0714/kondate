@@ -42,3 +42,16 @@ export function scaleIngredients(recipe: Pick<Recipe, 'ingredients' | 'servings'
 export function formatPortion(value: number): string {
   return `${Math.round(value * 100) / 100}倍`;
 }
+
+/** 人数の表示:「2.27人分」(小数2桁まで) */
+export function formatServings(value: number): string {
+  return `${Math.round(value * 100) / 100}人分`;
+}
+
+/** 画面表示用:「この日の合計:2.27人分(A 1倍・B 1.27倍)」 */
+export function formatDayTotal(
+  members: readonly Pick<Member, 'name' | 'sex' | 'age' | 'appetite' | 'portionOverride'>[],
+): string {
+  const parts = members.map((m) => `${m.name} ${formatPortion(portionOf(m))}`).join('・');
+  return `この日の合計:${formatServings(totalPortion(members))}(${parts})`;
+}

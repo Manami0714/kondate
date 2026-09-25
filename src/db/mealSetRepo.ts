@@ -1,6 +1,7 @@
 // 献立セットの確定・キャンセル・買った・作ったを、データベースに保存する
 // 計算は logic/mealSet.ts の純粋関数に任せ、ここでは在庫・在庫の動き・献立セットを1つのトランザクションで書き込むだけ
 import type { KondateDB } from './db';
+import { deleteDraft } from './draftRepo';
 import type { MealSet, Stock } from './types';
 import { randomId, type IdGenerator } from '../logic/id';
 import {
@@ -38,12 +39,13 @@ async function update(
   });
 }
 
-/** 献立を確定する。在庫は保存する直前にデータベースから読み直す */
+/** 献立を確定する。在庫は保存する直前にデータベースから読み直す。確定したら下書きを消す */
 export async function confirmPlanToDb(db: KondateDB, input: Omit<ConfirmInput, 'data'> & { data: Omit<ConfirmInput['data'], 'stocks'> }): Promise<MealSet> {
-  return db.transaction('rw', db.stocks, db.stockMoves, db.mealSets, async () => {
+  return db.transaction('rw', db.stocks, db.stockMoves, db.mealSets, db.planDrafts, async () => {
     const stocks = await db.stocks.toArray();
     const change = confirmPlan({ ...input, data: { ...input.data, stocks } });
     await saveChange(db, change);
+    await deleteDraft(db);
     return change.mealSet;
   });
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ENERGY_TABLE } from '../data/energyTable';
 import { INITIAL_RECIPES } from '../data/recipes';
 import type { Appetite, Sex } from '../db/types';
-import { autoPortion, energyRowFor, estimatedEnergy, portionOf, scaleIngredients, totalPortion } from './portion';
+import { autoPortion, energyRowFor, estimatedEnergy, formatDayTotal, portionOf, scaleIngredients, totalPortion } from './portion';
 
 const person = (sex: Sex, age: number, appetite: Appetite = 'ふつう', portionOverride: number | null = null) => ({
   sex,
@@ -72,5 +72,24 @@ describe('材料の量', () => {
     expect(scaled.find((i) => i.foodId === 'beef_koma')?.amount).toBe(225);
     expect(scaled.find((i) => i.foodId === 'potato')?.amount).toBe(4.5);
     expect(scaled.find((i) => i.foodId === 'potato')?.main).toBe(true);
+  });
+});
+
+describe('この日の合計の表示と量', () => {
+  const a = { ...person('女性', 25, '多め'), name: 'A' }; // 1950 / 2050 × 1.2 ≒ 1.141
+  const b = { ...person('女性', 80), name: 'B' }; // 1750 / 2050 ≒ 0.854
+
+  it('多めの女性18〜29歳は約1.14倍。1人だけの日は1.14人分の量になる', () => {
+    expect(portionOf(a)).toBe(1.141);
+    const nikujaga = INITIAL_RECIPES.find((r) => r.id === 'init_nikujaga');
+    if (!nikujaga) throw new Error('肉じゃががない');
+    // 牛こま 150g(2人分)→ 1人分75g × 1.141
+    expect(scaleIngredients(nikujaga, totalPortion([a])).find((i) => i.foodId === 'beef_koma')?.amount).toBe(85.575);
+  });
+
+  it('2人の合計がほぼ2倍なら、量もほぼ2人分になる。内訳で見分けられる', () => {
+    expect(totalPortion([a, b])).toBe(1.995);
+    expect(formatDayTotal([a, b])).toBe('この日の合計:2人分(A 1.14倍・B 0.85倍)');
+    expect(formatDayTotal([a])).toBe('この日の合計:1.14人分(A 1.14倍)');
   });
 });

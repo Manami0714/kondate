@@ -48,9 +48,14 @@ export function swapDish(
       return r ? mainFoodIds(r, data.foodsById) : [];
     }),
   );
+  // 同じ献立セットのほかの枠で使っているレシピ(同じセットの中で同じレシピは出さない)
+  const usedElsewhere = new Set(
+    current.flatMap((d, i) => COURSE_SLOTS.filter((s) => !(i === dayIndex && s.key === key)).map((s) => d[s.key])),
+  );
   const options = day.candidates[slot.course].filter(
     (r) =>
       r.id !== currentId &&
+      !usedElsewhere.has(r.id) &&
       !shownIds.includes(r.id) &&
       !mainFoodIds(r, data.foodsById).some((id) => otherMains.has(id)),
   );

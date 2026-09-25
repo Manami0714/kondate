@@ -31,6 +31,8 @@ export function useUpPoints(initial: SimStock, final: SimStock, data: PlannerDat
 interface DayState {
   stock: SimStock;
   history: HistoryEntry[];
+  /** この献立セットで、すでに選んだレシピ(同じセットの中で同じレシピは出さない) */
+  usedRecipeIds: ReadonlySet<string>;
 }
 
 interface BuiltDay extends DayState {
@@ -57,6 +59,7 @@ function buildDay(
 ): BuiltDay | null {
   const limit = data.household.shoppingLimitPerMeal;
   let { stock, history } = start;
+  const usedRecipeIds = new Set(start.usedRecipeIds);
   const chosen: Recipe[] = [];
   const usedMains = new Set<string>();
   const shopFoods = new Set<string>();
@@ -66,7 +69,7 @@ function buildDay(
   for (const slot of COURSE_SLOTS) {
     const ctx: DayContext = { date: day.date, members: day.members, forMember: day.forMember, stock, history };
     const options = day.candidates[slot.course]
-      .filter((r) => !mainFoodIds(r, data.foodsById).some((id) => usedMains.has(id)))
+      .filter((r) => !usedRecipeIds.has(r.id) && !mainFoodIds(r, data.foodsById).some((id) => usedMains.has(id)))
       .map((r) => {
         const ingredients = scaleIngredients(r, day.total);
         const use = dishUse(stock, ingredients, data.pantryIds);
@@ -85,12 +88,13 @@ function buildDay(
     stock = applyUse(stock, best.use.used);
     for (const id of best.use.shortage.keys()) shopFoods.add(id);
     for (const id of mainFoodIds(best.r, data.foodsById)) usedMains.add(id);
+    usedRecipeIds.add(best.r.id);
     history = [...history, { date: day.date, recipeId: best.r.id }];
   }
 
   if (isBalanced(chosen, data.foodsById)) score += SCORE.balancedMeal;
   const dishes: Dishes = { mainId: ids.mainId ?? '', sideId: ids.sideId ?? '', soupId: ids.soupId ?? '' };
-  return { dishes, score, shopCount: shopFoods.size, stock, history };
+  return { dishes, score, shopCount: shopFoods.size, stock, history, usedRecipeIds };
 }
 
 /** 1通りの献立を作る。主な材料がかぶらない組み合わせが作れなければ null */
@@ -104,7 +108,7 @@ function buildTrial(
 ): Trial | null {
   const initial = toSimStock(data.stocks);
   const limit = data.household.shoppingLimitPerMeal;
-  let state: DayState = { stock: initial, history: [...data.history] };
+  let state: DayState = { stock: initial, history: [...data.history], usedRecipeIds: new Set() };
   let total = 0;
   const days: PlannedDay[] = [];
 
@@ -116,7 +120,7 @@ function buildTrial(
     if (overLimit) built = buildDay(day, state, false, explore, request, data, recipesById, rng) ?? built;
 
     total += built.score - (overLimit ? SCORE.overLimitPenalty : 0);
-    state = { stock: built.stock, history: built.history };
+    state = { stock: built.stock, history: built.history, usedRecipeIds: built.usedRecipeIds };
     days.push({ date: day.date, memberIds: day.memberIds, ...built.dishes, overLimit });
   }
 
@@ -137,7 +141,7 @@ export function makePlan(request: PlanRequest, data: PlannerData, rng: Rng): Pla
     if (trial && (best === null || trial.total > best.total)) best = trial;
   }
   if (!best) {
-    return { ok: false, error: '主な材料がかぶらない組み合わせが見つかりません。レシピを増やすか、条件を緩めてください' };
+    return { ok: false, error: '同じ料理を2回使わず、主な材料もかぶらない組み合わせが見つかりません。レシピを増やすか、条件を緩めてください' };
   }
   return { ok: true, days: best.days };
 }

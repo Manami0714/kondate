@@ -5,7 +5,7 @@ import { DIFFICULTY_LABELS, formatAmount, formatApproxAmount } from '../logic/fo
 interface Props {
   recipe: Recipe;
   byId: ReadonlyMap<string, Food>;
-  /** 人数に合わせた量で見せるとき:その量と、見出しに出す説明(例:「合計2.3倍分」) */
+  /** 人数に合わせた量で見せるとき:その量と、人数の説明(例:「この日の合計:2.27人分(A 1倍・B 1.27倍)」) */
   scaled?: { ingredients: RecipeIngredient[]; label: string };
 }
 
@@ -37,7 +37,7 @@ export function RecipeDetail({ recipe, byId, scaled }: Props) {
     <div className="form">
       <div className="card">
         <div>
-          {recipe.course}・{recipe.minutes}分・{DIFFICULTY_LABELS[recipe.difficulty]}・{recipe.servings}人分
+          {recipe.course}・{recipe.minutes}分・{DIFFICULTY_LABELS[recipe.difficulty]}・{scaled ? `元のレシピは${recipe.servings}人分` : `${recipe.servings}人分`}
         </div>
         <div className="tags" style={{ marginTop: 8 }}>
           {recipe.methods.map((m) => (
@@ -56,7 +56,8 @@ export function RecipeDetail({ recipe, byId, scaled }: Props) {
         </div>
       </div>
 
-      <h3 className="section-title">材料({scaled ? scaled.label : `${recipe.servings}人分`})</h3>
+      <h3 className="section-title">材料{scaled ? "(この日の人数に合わせた量)" : `(${recipe.servings}人分)`}</h3>
+      {scaled && <div className="note">{scaled.label}</div>}
       {main.length > 0 && ingredientList(main)}
       {seasonings.length > 0 && (
         <>

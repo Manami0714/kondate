@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { MealStatus } from '../../db/types';
 import { formatDayLabel } from '../../logic/date';
 import { DIFFICULTY_LABELS } from '../../logic/format';
-import { formatPortion } from '../../logic/portion';
+import { formatDayTotal } from '../../logic/portion';
 import { DAY_ALLERGY_NOTE, UNCERTAIN_FOOD_NOTE } from '../../logic/planner/allergyNotes';
 import { ALWAYS_YELLOW_SOURCE } from '../../logic/planner/balance';
 import type { DaySummary, DishDetail } from '../../logic/planner/summary';
@@ -34,9 +34,7 @@ export function DayCard({ day, status, headExtra, onOpenDish, dishAction, childr
         </span>
         {headExtra}
       </div>
-      <div className="muted">
-        {day.members.map((m) => m.name).join('・')}(合計{formatPortion(day.total)})
-      </div>
+      <div className="muted">{formatDayTotal(day.members)}</div>
       {day.allergyNote && <div className="note note-warn">{DAY_ALLERGY_NOTE}</div>}
 
       {day.dishes.map((dish, i) => (

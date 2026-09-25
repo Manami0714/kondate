@@ -234,3 +234,35 @@ export const TABLE_NAMES = [
   'stockMoves',
   'feedbacks',
 ] as const satisfies readonly (keyof AllData)[];
+
+// ───────── 下書き ─────────
+
+/** 下書きの1日分(献立の提案と同じ形) */
+export interface DraftDay {
+  date: DateString;
+  memberIds: string[];
+  mainId: string;
+  sideId: string;
+  soupId: string;
+  /** 買い足しの上限を緩めて組んだ日 */
+  overLimit: boolean;
+}
+
+/**
+ * 確定前の献立の提案(下書き)。1件だけ持つ。
+ * タブを切り替えたりアプリを閉じたりしても消えないように保存し、「条件からやり直す」か「確定」で消す。
+ * 書き出し・読み込みの対象にはしない
+ */
+export interface PlanDraft {
+  id: 'draft';
+  savedAt: DateTimeString;
+  startDate: DateString;
+  conditions: PlanConditions;
+  /** 条件の画面で追加したゲスト */
+  addedGuests: GuestStay[];
+  /** 提案に使ったゲストの滞在(前のセットからの引き継ぎを含む) */
+  guests: GuestStay[];
+  days: DraftDay[];
+  /** 枠ごとに、入れ替えですでに見せた品 */
+  shown: Record<string, string[]>;
+}

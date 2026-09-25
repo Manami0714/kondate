@@ -101,7 +101,8 @@ describe('ゲスト', () => {
     const input = buildDays('2026-09-25', [family, guest], stays);
     expect(input.map((d) => d.memberIds)).toEqual([['a'], ['a', 'g'], ['a']]);
 
-    const data = plannerData({ recipes: [recipe('m', '主菜', [['pork_koma', 200, true]]), ...fillerSidesAndSoups()], members: [family, guest] });
+    const mains = ['m1', 'm2', 'm3'].map((id) => recipe(id, '主菜', [['pork_koma', 200, true]]));
+    const data = plannerData({ recipes: [...mains, ...fillerSidesAndSoups()], members: [family, guest] });
     const plan = makePlan({ days: input, conditions: conditions() }, data, seededRng(1));
     if (!plan.ok) throw new Error(plan.error);
     const summary = summarizePlan(plan.days, data).days;
@@ -160,7 +161,7 @@ describe('開始日', () => {
 });
 
 describe('作った料理の履歴', () => {
-  it('「作った」と、日付が過ぎた「予定」を数える。キャンセルは数えない', () => {
+  it('「作った」と、まだ「作った」を押していない「予定」(これからの日も)を数える。キャンセルは数えない', () => {
     const base = { mainId: 'm', sideId: 's', soupId: 'p', memberIds: [] };
     const s: MealSet = {
       id: 's',
@@ -178,10 +179,12 @@ describe('作った料理の履歴', () => {
       shopping: [],
       overLimitDays: [],
     };
-    expect(cookedHistory([s], '2026-09-25').map((h) => h.date)).toEqual([
+    expect(cookedHistory([s]).map((h) => h.date)).toEqual([
       '2026-09-20', '2026-09-20', '2026-09-20',
       '2026-09-21', '2026-09-21', '2026-09-21',
+      '2026-09-25', '2026-09-25', '2026-09-25',
     ]);
+    expect(cookedHistory([{ ...s, status: 'キャンセル' }])).toEqual([]);
   });
 });
 
@@ -221,5 +224,25 @@ describe('栄養バランス(黄はご飯でそろう)', () => {
     expect(mealBalance([red], foodsById).balanced).toBe(false);
     expect(mealBalance([green, soup], foodsById).balanced).toBe(false);
     expect(ALWAYS_YELLOW_SOURCE).toBe('ご飯');
+  });
+});
+
+describe('入れ替えでも同じ献立セットの中で同じレシピは出さない', () => {
+  it('ほかの日で使っている料理には替わらない', () => {
+    const rs = [
+      recipe('x1', '主菜', [['pork_koma', 200, true]]),
+      recipe('x2', '主菜', [['salmon', 2, true]], { favorite: true }),
+      ...fillerSidesAndSoups(),
+    ];
+    const d = plannerData({ recipes: rs, members: [member('a')] });
+    const twoDays = days(['a']).slice(0, 2);
+    const plan: PlannedDay[] = [
+      { ...twoDays[0], mainId: 'x1', sideId: 'side_a', soupId: 'soup_a', overLimit: false },
+      { ...twoDays[1], mainId: 'x2', sideId: 'side_b', soupId: 'soup_b', overLimit: false },
+    ];
+    expect(swapDish({ days: twoDays, conditions: conditions() }, d, plan, 0, 'mainId', ['x1'])).toEqual({
+      ok: false,
+      error: 'ほかの主菜の候補がありません',
+    });
   });
 });

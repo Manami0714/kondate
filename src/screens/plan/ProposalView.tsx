@@ -1,6 +1,7 @@
 import type { Food } from '../../db/types';
 import { ErrorList } from '../../components/Field';
 import { formatApproxAmount } from '../../logic/format';
+import { formatDayTotal } from '../../logic/portion';
 import type { DaySummary, DishDetail } from '../../logic/planner/summary';
 import { COURSE_SLOTS, type Dishes, type PlannedDay } from '../../logic/planner/types';
 import { DayCard } from './DayCard';
@@ -12,7 +13,7 @@ interface Props {
   shoppingLimit: number;
   errors: string[];
   busy: boolean;
-  onOpenDish: (dish: DishDetail, total: number) => void;
+  onOpenDish: (dish: DishDetail, label: string) => void;
   onSwap: (dayIndex: number, key: keyof Dishes) => void;
   onRetry: () => void;
   onBack: () => void;
@@ -36,7 +37,7 @@ export function ProposalView({ plan, summary, foodsById, shoppingLimit, errors, 
           key={day.date}
           day={day}
           headExtra={<span className="muted">買い足し {day.shopping.size}品</span>}
-          onOpenDish={(dish) => onOpenDish(dish, day.total)}
+          onOpenDish={(dish) => onOpenDish(dish, formatDayTotal(day.members))}
           dishAction={(dish) => {
             const slot = COURSE_SLOTS.find((s) => s.course === dish.recipe.course);
             return (

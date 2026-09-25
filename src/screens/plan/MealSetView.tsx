@@ -8,7 +8,7 @@ import type { PlannerSource } from '../../hooks/usePlannerData';
 import { formatDayLabel, formatShortDate } from '../../logic/date';
 import type { MealSetResult } from '../../logic/mealSet';
 import { summarizePlan, type DishDetail } from '../../logic/planner/summary';
-import { formatPortion } from '../../logic/portion';
+import { formatDayTotal } from '../../logic/portion';
 import { RecipeDetail } from '../RecipeDetail';
 import { DayCard } from './DayCard';
 import { ShoppingList } from './ShoppingList';
@@ -22,7 +22,7 @@ interface Props {
 /** 確定した献立セット:作った・キャンセル・買い足し */
 export function MealSetView({ set, src, today }: Props) {
   const [errors, setErrors] = useState<string[]>([]);
-  const [opened, setOpened] = useState<{ dish: DishDetail; total: number } | null>(null);
+  const [opened, setOpened] = useState<{ dish: DishDetail; label: string } | null>(null);
   // 量・栄養・注意書きだけを見るので、在庫は使わない
   const summary = useMemo(() => summarizePlan(set.days, { ...src.data, stocks: [] }).days, [set.days, src.data]);
   const lastDate = set.days[set.days.length - 1]?.date ?? set.startDate;
@@ -50,7 +50,7 @@ export function MealSetView({ set, src, today }: Props) {
       {summary.map((day, dayIndex) => {
         const status = set.days[dayIndex].status;
         return (
-          <DayCard key={day.date} day={day} status={status} onOpenDish={(dish) => setOpened({ dish, total: day.total })}>
+          <DayCard key={day.date} day={day} status={status} onOpenDish={(dish) => setOpened({ dish, label: formatDayTotal(day.members) })}>
             {status === '予定' && (
               <>
                 {day.date < today && <div className="field-hint">過ぎた日です。「作った」かキャンセルを選んでください</div>}
@@ -80,7 +80,7 @@ export function MealSetView({ set, src, today }: Props) {
           <RecipeDetail
             recipe={opened.dish.recipe}
             byId={src.foodsById}
-            scaled={{ ingredients: opened.dish.ingredients, label: `合計${formatPortion(opened.total)}分` }}
+            scaled={{ ingredients: opened.dish.ingredients, label: opened.label }}
           />
         </Sheet>
       )}
