@@ -6,7 +6,7 @@ import { normalizeForSearch } from '../foodSearch';
 import { NET_SUPER_REAL_SAMPLE, NET_SUPER_SAMPLE, RECEIPT_SAMPLE } from './fixtures';
 import { cleanProductName, isDropLine, splitLines } from './lines';
 import { parseNetSuperLines } from './netSuper';
-import { parsePaste, productWord } from './parsePaste';
+import { matchingIgnoredWords, parsePaste, productWord } from './parsePaste';
 import { parseReceiptLines } from './receipt';
 
 const summary = (text: string, foods: readonly Food[] = INITIAL_FOODS, ignored: IgnoredWord[] = []) =>
@@ -186,13 +186,42 @@ describe('直した内容を次回から自動で読む', () => {
     expect([second?.status, second?.foodId, second?.amount]).toEqual(['読み取った', 'pork_loin', 250]);
   });
 
-  it('「食材ではない」を選んだ品は、次回から「食材ではない」に入る(少し違う商品名でも)', () => {
-    const ignored: IgnoredWord[] = ['ふんわりトイレットロール', 'はちみつりんご(大玉)'].map((label) => ({
+  it('「食材ではない」を選んだ品は、次回から「食材ではない」に入る(読まない言葉を含む長い商品名でも)', () => {
+    const ignored: IgnoredWord[] = ['ふんわりトイレットロール', 'はちみつりんご'].map((label) => ({
       word: normalizeForSearch(label),
       label,
       addedAt: '2026-01-09T00:00:00.000Z',
     }));
     const items = parsePaste(NET_SUPER_SAMPLE, INITIAL_FOODS, ignored).items;
     expect(items.filter((i) => i.status === '食材ではない').map((i) => i.word)).toEqual(['ふんわりトイレットロール 12ロール', 'はちみつりんご']);
+  });
+});
+
+describe('読まない言葉の決まり', () => {
+  const ignoredOf = (...labels: string[]): IgnoredWord[] =>
+    labels.map((label) => ({ word: normalizeForSearch(label), label, addedAt: '2026-01-09T00:00:00.000Z' }));
+  const hits = (product: string, ...labels: string[]) => matchingIgnoredWords(product, ignoredOf(...labels)).length > 0;
+
+  it('まったく同じなら、短い言葉でも効く(ひらがな・カタカナ・半角・空白の違いは同じとみなす)', () => {
+    expect(hits('チーズ', 'チーズ')).toBe(true);
+    expect(hits('ﾁｰｽﾞ', 'ちーず')).toBe(true);
+    expect(hits('トイレット ペーパー', 'トイレットペーパー')).toBe(true);
+  });
+
+  it('4文字以上の読まない言葉は、それを含む長い商品名にも効く', () => {
+    expect(hits('徳用NZ産有機サンゴールドキウイ(特大パック)', '徳用NZ産有機サンゴールドキウイ')).toBe(true);
+    expect(hits('まろやかプロセスチーズ', 'プロセスチーズ')).toBe(true);
+  });
+
+  it('3文字以下の読まない言葉は、まったく同じときだけ効く(「チーズ」で「ピザ用チーズ」は読まなくならない)', () => {
+    expect(hits('ピザ用チーズ', 'チーズ')).toBe(false);
+  });
+
+  it('逆向き(商品名が読まない言葉に含まれる)は効かない', () => {
+    expect(hits('中華スープ', '中華スープの素セット')).toBe(false);
+    expect(hits('徳用NZ産有機サンゴールドキウイ', '徳用NZ産有機サンゴールドキウイ(特大パック)')).toBe(false);
+    // 読まない言葉の中の食材らしい部分と同じ名前の商品は、ふつうに読まれる
+    const items = parsePaste(['ごぼう', '1点 204円★'].join('\n'), INITIAL_FOODS, ignoredOf('ごぼうとにんじんの詰め合わせ箱')).items;
+    expect(items.map((i) => [i.word, i.status])).toEqual([['ごぼう', '読み取った']]);
   });
 });

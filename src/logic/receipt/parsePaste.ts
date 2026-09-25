@@ -60,15 +60,17 @@ function pickQuantity(name: string, food: Food | null): Quantity | null {
   return list[0] ?? null;
 }
 
-/** 当てはまる読まない言葉(同じ言葉か、十分に長ければ、どちらかがもう一方を含む) */
+/**
+ * 当てはまる読まない言葉。
+ * - まったく同じ(空白・ひらがなとカタカナ・半角と全角の違いは同じとみなす)なら、長さに関係なく効く
+ * - 読まない言葉が4文字以上で、商品名に含まれていれば効く(「(特大パック)」が付いたり付かなかったりする品のため)
+ */
 export function matchingIgnoredWords(word: string, ignored: readonly IgnoredWord[]): IgnoredWord[] {
   const key = normalizeForSearch(word);
   if (key === '') return [];
-  return ignored.filter(
-    (w) =>
-      w.word === key ||
-      (Math.min(w.word.length, key.length) >= IGNORED_CONTAIN_MIN_LENGTH && (key.includes(w.word) || w.word.includes(key))),
-  );
+  // 読まない言葉が商品名に含まれるときだけ効かせる。逆向き(商品名が読まない言葉に含まれる)は、
+  // 読まない言葉の中の食材らしい部分と同じ名前の商品まで読まなくなるので、効かせない
+  return ignored.filter((w) => w.word === key || (w.word.length >= IGNORED_CONTAIN_MIN_LENGTH && key.includes(w.word)));
 }
 
 /** 食材に当てはめたときの量:商品名の量×点数。量がなければふつうの量×点数 */
