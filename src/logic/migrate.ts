@@ -79,6 +79,17 @@ export function upgradeBackupDataV2(data: Obj): void {
   if (data.ignoredWords === undefined) data.ignoredWords = [];
 }
 
+/** 食材:1単位あたりの重さ(g)を足す。初期食材は初期データの値、それ以外は空 */
+export function upgradeFoodV4(o: Obj): void {
+  const seed = typeof o.id === 'string' ? seedFoods.get(o.id) : undefined;
+  if (o.gramsPerUnit === undefined) o.gramsPerUnit = seed?.gramsPerUnit ?? null;
+}
+
+/** 版3の書き出しファイルの data を、版4の形に直す(食材に1単位あたりの重さを足す) */
+export function upgradeBackupDataV3(data: Obj): void {
+  if (Array.isArray(data.foods)) for (const f of data.foods) if (isObj(f)) upgradeFoodV4(f);
+}
+
 /**
  * 初期データのうち、まだ入っていない食材とレシピ(初期レシピを追加したときに、既存の端末へ届けるため)。
  * 追加した回ごとにデータベースの版を上げ、その upgrade でこれを入れる

@@ -48,6 +48,7 @@ describe('食材辞書への追加', () => {
     isCondiment: false,
     allergens: [],
     allergenUncertain: false,
+    gramsPerUnit: '',
   };
 
   it('正しく入れると食材になる', () => {
@@ -66,8 +67,17 @@ describe('食材辞書への追加', () => {
         isCondiment: false,
         allergens: [],
         allergenUncertain: false,
+        gramsPerUnit: null,
       },
     });
+  });
+
+  it('1単位あたりの重さ:入れれば数字、空欄なら null、0以下はエラー、単位が g なら持たない', () => {
+    const ok = validateFoodDraft({ ...base, gramsPerUnit: '150' }, INITIAL_FOODS, 'new1');
+    expect(ok.ok && ok.value.gramsPerUnit).toBe(150);
+    expect(validateFoodDraft({ ...base, gramsPerUnit: '0' }, INITIAL_FOODS, 'new1').ok).toBe(false);
+    const gram = validateFoodDraft({ ...base, unit: 'g', gramsPerUnit: '150' }, INITIAL_FOODS, 'new1');
+    expect(gram.ok && gram.value.gramsPerUnit).toBeNull();
   });
 
   it('要確認の印が保存される', () => {

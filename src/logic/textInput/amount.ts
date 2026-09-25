@@ -1,6 +1,7 @@
 // 量の読み取りと、辞書の単位への換算(純粋関数)
 import {
   AMOUNT_WORDS,
+  CONVERTED_ROUND_STEP,
   COUNT_UNITS,
   GENERIC_COUNT_UNIT,
   HALF_RATIO,
@@ -79,12 +80,13 @@ export function readQuantity(matchText: string): Quantity | null {
   return findQuantities(matchText)[0]?.quantity ?? null;
 }
 
-/** 量の注意:量が読めなかった/単位が辞書と違ったので「ふつうの量」を使った */
-export type AmountNote = 'no-amount' | 'unit-mismatch';
+/** 量の注意:量が読めなかった/単位が辞書と違ったので「ふつうの量」を使った/重さから換算した */
+export type AmountNote = 'no-amount' | 'unit-mismatch' | 'converted';
 
 export const AMOUNT_NOTE_LABELS: Record<AmountNote, string> = {
   'no-amount': '量が読めなかったので、ふつうの量にしました',
   'unit-mismatch': '単位が辞書と違うので、ふつうの量にしました',
+  converted: '重さを、辞書の「1単位あたりの重さ」で換算しました',
 };
 
 /**
@@ -92,6 +94,7 @@ export const AMOUNT_NOTE_LABELS: Record<AmountNote, string> = {
  * - 量がない → ふつうの量(注意つき)
  * - 単位が辞書と同じ・単位がない → そのまま。「個」はどの数える単位にも合わせる(大根2個=2本)
  * - 数える単位で辞書と違う(豚こま1パック、辞書は g)→ ふつうの量×数(注意つき)
+ * - 重さで辞書と違い、辞書に1単位あたりの重さがある(米 5kg、1合=150g)→ 重さ÷1単位の重さ(注意つき)
  * - 重さ・かさで辞書と違う(人参 500g、辞書は本)→ ふつうの量(注意つき)
  * - 半分:数える単位は1つの半分、それ以外は今の在庫の半分(在庫がなければふつうの量の半分)
  * - 少し:ふつうの量の1割
@@ -117,6 +120,10 @@ export function toFoodAmount(
       const { value, unit } = quantity;
       if (unit === null || unit === food.unit) return result(value);
       if (unit === GENERIC_COUNT_UNIT && isCountUnit) return result(value);
+      if (unit === 'g' && food.gramsPerUnit !== null && food.gramsPerUnit > 0) {
+        const units = Math.round(value / food.gramsPerUnit / CONVERTED_ROUND_STEP) * CONVERTED_ROUND_STEP;
+        return result(units, 'converted');
+      }
       if (COUNT_UNITS.includes(unit)) return result(food.usualAmount * value, 'unit-mismatch');
       return result(food.usualAmount, 'unit-mismatch');
     }

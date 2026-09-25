@@ -4,6 +4,9 @@
 /** 「半分」などの言葉をかける割合 */
 export const HALF_RATIO = 0.5;
 
+/** 重さ(g)から辞書の単位に換算したときの丸めの細かさ(米 5kg → 33.3合) */
+export const CONVERTED_ROUND_STEP = 0.1;
+
 /** 「少し」= 辞書の「ふつうの量」のこの割合 */
 export const LITTLE_RATIO = 0.1;
 

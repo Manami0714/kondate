@@ -8,6 +8,8 @@ export interface ProductLine {
   name: string;
   /** 点数・個数 */
   count: number;
+  /** 2つの食材が見つかったので、行で分けて読んだ(写真の文字が紛れ込んだかもしれないので、自信のない食材にする) */
+  split?: boolean;
 }
 
 /** 行に分けて、半角カナを全角に、空白を1つにそろえる。空の行は捨てる */

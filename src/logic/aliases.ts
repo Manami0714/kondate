@@ -12,3 +12,14 @@ export function withAlias(food: Food, word: string, foods: readonly Food[]): Foo
   if (findFoodByExactName([food, ...foods], alias)) return null;
   return { ...food, aliases: [...food.aliases, alias] };
 }
+
+/**
+ * 食材から、その言葉とまったく同じ別名を外した新しい食材を返す(ひらがな・カタカナ・半角の違いは同じとみなす)。
+ * 外す別名がなければ null。食材名そのものは外さない
+ */
+export function withoutAlias(food: Food, word: string): Food | null {
+  const key = normalizeForSearch(word);
+  if (key === '') return null;
+  const aliases = food.aliases.filter((a) => normalizeForSearch(a) !== key);
+  return aliases.length === food.aliases.length ? null : { ...food, aliases };
+}

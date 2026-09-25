@@ -21,7 +21,7 @@ import {
 } from '../db/types';
 import { toDateTimeString } from './date';
 import { parseComboValue } from './feedback/target';
-import { upgradeBackupDataV1, upgradeBackupDataV2 } from './migrate';
+import { upgradeBackupDataV1, upgradeBackupDataV2, upgradeBackupDataV3 } from './migrate';
 import {
   ValidationError,
   arr,
@@ -90,6 +90,8 @@ export function parseBackup(text: string): ParseResult {
     if (version < 2) upgradeBackupDataV1(d);
     // 版2までのファイルには読まない言葉がない
     if (version < 3) upgradeBackupDataV2(d);
+    // 版3までのファイルの食材には、1単位あたりの重さがない
+    if (version < 4) upgradeBackupDataV3(d);
     const data: AllData = {
       foods: arr(d, 'foods', 'data').map((v, i) => parseFood(v, `食材辞書[${i}]`)),
       stocks: arr(d, 'stocks', 'data').map((v, i) => parseStock(v, `在庫[${i}]`)),
@@ -133,6 +135,7 @@ function parseFood(v: unknown, p: string): Food {
     isCondiment: bool(o, 'isCondiment', p),
     allergens: oneOfArr(o, 'allergens', ALLERGENS, p),
     allergenUncertain: bool(o, 'allergenUncertain', p),
+    gramsPerUnit: numOrNull(o, 'gramsPerUnit', p),
   };
 }
 

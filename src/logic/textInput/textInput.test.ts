@@ -91,6 +91,12 @@ describe('辞書の単位にする', () => {
     expect(toFoodAmount({ kind: 'all' }, food('pork_koma'), 250)).toEqual({ amount: 250, note: null });
   });
 
+  it('重さで書かれていて、辞書に1単位あたりの重さがあれば換算する(米 5kg → 33.3合)', () => {
+    expect(toFoodAmount({ kind: 'number', value: 5000, unit: 'g' }, food('rice'), 0)).toEqual({ amount: 33.3, note: 'converted' });
+    // 1単位あたりの重さがない食材は、今まで通りふつうの量
+    expect(toFoodAmount({ kind: 'number', value: 500, unit: 'g' }, food('carrot'), 0)).toEqual({ amount: 3, note: 'unit-mismatch' });
+  });
+
   it('量がない・単位が違うときはふつうの量(注意つき)', () => {
     expect(toFoodAmount(null, food('egg'), 0)).toEqual({ amount: 10, note: 'no-amount' });
     // 人参 500g(辞書は本、ふつうの量3本)

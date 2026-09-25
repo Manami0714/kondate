@@ -34,6 +34,11 @@ export interface Food {
   allergens: Allergen[];
   /** アレルギー物質は要確認の印。商品によって差が大きく、上の一覧に自信がない食材 */
   allergenUncertain: boolean;
+  /**
+   * 1単位あたりの重さ(g)。g 以外の単位の食材で、重さで書かれた量(レシートの「米 5kg」など)を換算するのに使う。
+   * わからなければ null(そのときは今まで通りふつうの量にする)
+   */
+  gramsPerUnit: number | null;
 }
 
 /** 在庫。食材ごとに1行 */

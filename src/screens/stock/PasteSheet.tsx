@@ -5,17 +5,10 @@ import { Sheet } from '../../components/Sheet';
 import { db } from '../../db/db';
 import { addPurchasesInDb } from '../../db/stockRepo';
 import type { Food, IgnoredWord } from '../../db/types';
-import { withAlias } from '../../logic/aliases';
-import { parseAmount } from '../../logic/forms';
+import { withoutAlias } from '../../logic/aliases';
 import { amountToInput } from '../../logic/format';
-import { makeIgnoredWord } from '../../logic/receipt/ignoredWord';
-import {
-  matchingIgnoredWords,
-  parsePaste,
-  purchaseAmount,
-  type PasteItem,
-  type PasteStatus,
-} from '../../logic/receipt/parsePaste';
+import { parsePaste, purchaseAmount, type PasteItem, type PasteStatus } from '../../logic/receipt/parsePaste';
+import { planPasteSave, type PasteRowState } from '../../logic/receipt/pasteSave';
 import { AMOUNT_NOTE_LABELS, type AmountNote } from '../../logic/textInput/amount';
 
 interface Props {
@@ -26,17 +19,9 @@ interface Props {
 }
 
 /** 確認画面の1行 */
-interface Row {
+interface Row extends PasteRowState {
   key: number;
-  item: PasteItem;
-  foodId: string | null;
-  amountText: string;
-  include: boolean;
   note: AmountNote | null;
-  /** 確認画面で食材を選び直した(保存すると商品名がその食材の別名になる) */
-  corrected: boolean;
-  /** 「食材ではない」を選んだ */
-  notFood: boolean;
 }
 
 function toRow(item: PasteItem, key: number): Row {
@@ -54,7 +39,7 @@ function toRow(item: PasteItem, key: number): Row {
 }
 
 const SECTIONS: { status: PasteStatus; title: string; hint: string }[] = [
-  { status: '読み取った', title: '読み取った食材', hint: '量を確かめてください。違う食材なら「変える」で直せます' },
+  { status: '読み取った', title: '読み取った食材', hint: '量を確かめてください。違う食材なら「変える」、食材でなければ「食材ではない」で直せます' },
   { status: '自信がない', title: '自信のない食材', hint: '食材を選ぶとチェックが入ります。選んだ内容は次から自動で読めます' },
   { status: '読めなかった', title: '読めなかった行', hint: '食材を選ぶと、その商品名を別名として覚えます。食材でなければ「食材ではない」を押すと、次から読みません' },
 ];
@@ -91,37 +76,13 @@ export function PasteSheet({ foods, byId, ignoredWords, onClose }: Props) {
 
   const save = async () => {
     if (!rows) return;
-    const errs: string[] = [];
-    const items: { foodId: string; amount: number }[] = [];
-    for (const row of rows) {
-      if (!row.include || row.notFood || row.foodId === null) continue;
-      const amount = parseAmount(row.amountText);
-      if (amount === null || amount <= 0) errs.push(`${row.item.name}の量を0より大きい数字にしてください`);
-      else items.push({ foodId: row.foodId, amount });
-    }
-    if (errs.length > 0) {
-      setErrors(errs);
+    const now = new Date();
+    const plan = planPasteSave(rows, foods, ignoredWords, now);
+    if (!plan.ok) {
+      setErrors(plan.errors);
       return;
     }
-    const now = new Date();
-    // 選び直した食材は、商品名を別名として覚える
-    const updated = new Map<string, Food>();
-    for (const row of rows) {
-      if (!row.include || row.notFood || !row.corrected || row.foodId === null) continue;
-      const food = updated.get(row.foodId) ?? byId.get(row.foodId);
-      const next = food ? withAlias(food, row.item.word, [...foods, ...updated.values()]) : null;
-      if (next) updated.set(next.id, next);
-    }
-    // この画面で「食材ではない」を選んだ品は、読まない言葉として覚える
-    const ignored = rows
-      .filter((r) => r.notFood && r.item.status !== '食材ではない')
-      .map((r) => makeIgnoredWord(r.item.word, now))
-      .filter((w): w is IgnoredWord => w !== null);
-    // 「食材ではない」に入っていた品を食材に選び直したら、その読まない言葉を外す
-    const unignore = rows
-      .filter((r) => r.item.status === '食材ではない' && !r.notFood && r.foodId !== null)
-      .flatMap((r) => matchingIgnoredWords(r.item.word, ignoredWords).map((w) => w.word));
-    await addPurchasesInDb(db, items, [...updated.values()], { add: ignored, remove: [...new Set(unignore)] }, now);
+    await addPurchasesInDb(db, plan.items, plan.updatedFoods, plan.ignoredWords, now);
     onClose();
   };
 
@@ -235,6 +196,8 @@ interface RowProps {
 
 /** 確認画面の1商品 */
 function PasteRow({ row, byId, onUpdate, onChoose, onPick }: RowProps) {
+  // 「食材ではない」にすると別名から外れる食材(商品名とまったく同じ別名を持つもの)
+  const aliasOwner = row.notFood ? [...byId.values()].find((f) => withoutAlias(f, row.item.word) !== null) : undefined;
   const food = row.foodId ? byId.get(row.foodId) : undefined;
   const candidates = row.item.candidateIds.map((id) => byId.get(id)).filter((f): f is Food => f !== undefined);
   return (
@@ -253,7 +216,14 @@ function PasteRow({ row, byId, onUpdate, onChoose, onPick }: RowProps) {
           {row.item.count > 1 && `(${row.item.count}点)`}
         </div>
         {row.notFood ? (
-          <div className="muted">食材ではない{row.item.status !== '食材ではない' && '(次から読みません)'}</div>
+          <div className="muted">
+            食材ではない{row.item.status !== '食材ではない' && '(次から読みません)'}
+            {aliasOwner && row.item.status !== '食材ではない' && (
+              <div className="field-hint">
+                「{row.item.word}」を{aliasOwner.name}の別名からも外します
+              </div>
+            )}
+          </div>
         ) : food ? (
           <>
             <div className="list-title">
@@ -295,8 +265,8 @@ function PasteRow({ row, byId, onUpdate, onChoose, onPick }: RowProps) {
               {candidates[0].name}でよい
             </button>
           )}
-          {row.item.status !== '読み取った' && row.item.status !== '食材ではない' && (
-            <button type="button" className="btn btn-small" onClick={() => onUpdate({ notFood: !row.notFood, include: false })}>
+          {row.item.status !== '食材ではない' && (
+            <button type="button" className="btn btn-small" onClick={() => onUpdate({ notFood: !row.notFood, include: row.notFood && row.foodId !== null })}>
               {row.notFood ? '取り消す' : '食材ではない'}
             </button>
           )}

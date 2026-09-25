@@ -32,6 +32,7 @@ function emptyDraft(name: string): FoodDraft {
     isCondiment: false,
     allergens: [],
     allergenUncertain: false,
+    gramsPerUnit: '',
   };
 }
 
@@ -111,6 +112,19 @@ export function FoodForm({ food = null, initialName = '', foods, onSaved, onCanc
           />
         </Field>
       </div>
+      {draft.unit.trim() !== 'g' && (
+        <Field
+          label={`1${draft.unit.trim() || '単位'}あたりの重さ(g)`}
+          hint="レシートの「5kg」のように重さで書かれた量を換算するのに使います。わからなければ空欄(ふつうの量になります)"
+        >
+          <input
+            className="input"
+            inputMode="decimal"
+            value={draft.gramsPerUnit}
+            onChange={(e) => set('gramsPerUnit', e.target.value)}
+          />
+        </Field>
+      )}
       {food && food.unit !== draft.unit.trim() && (
         <p className="field-hint">単位を変えても、在庫やレシピの量の数字はそのままです。必要なら量も直してください。</p>
       )}

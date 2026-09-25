@@ -6,6 +6,7 @@ import { INITIAL_RECIPES } from '../data/recipes';
 import {
   missingSeeds,
   upgradeFoodV1,
+  upgradeFoodV4,
   upgradeHouseholdV1,
   upgradeMealSetV1,
   upgradeMemberV1,
@@ -79,6 +80,11 @@ export class KondateDB extends Dexie {
 
     // 版4:読まない言葉(レシートで「食材ではない」を選んだ品)の表を足す
     this.version(4).stores({ ignoredWords: 'word' });
+
+    // 版5:食材に1単位あたりの重さ(g)を足す(米は1合=150g)
+    this.version(5).upgrade(async (tx) => {
+      await tx.table('foods').toCollection().modify((o: Obj) => upgradeFoodV4(o));
+    });
 
     // データベースを初めて作ったときだけ、初期データを入れる
     this.on('populate', (tx) => {

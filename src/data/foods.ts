@@ -15,7 +15,7 @@ function food(
   allergens: Allergen[] = [],
   isCondiment = false,
 ): Food {
-  return { id, name, aliases, unit, usualAmount, kind: '食材', foodGroup, shelfLifeDays, isCondiment, allergens, allergenUncertain: false };
+  return { id, name, aliases, unit, usualAmount, kind: '食材', foodGroup, shelfLifeDays, isCondiment, allergens, allergenUncertain: false, gramsPerUnit: null };
 }
 
 /** 調味料を作る(食品グループなし) */
@@ -28,7 +28,7 @@ function seasoning(
   shelfLifeDays = 365,
   allergens: Allergen[] = [],
 ): Food {
-  return { id, name, aliases, unit, usualAmount, kind: '調味料', foodGroup: null, shelfLifeDays, isCondiment: false, allergens, allergenUncertain: false };
+  return { id, name, aliases, unit, usualAmount, kind: '調味料', foodGroup: null, shelfLifeDays, isCondiment: false, allergens, allergenUncertain: false, gramsPerUnit: null };
 }
 
 const FOOD_LIST: Food[] = [
@@ -163,6 +163,14 @@ const FOOD_LIST: Food[] = [
 /** アレルギー物質は要確認の食材(商品によって差が大きく、自信がないもの) */
 const ALLERGEN_UNCERTAIN_IDS = new Set(['dashi', 'salad_oil', 'ketchup', 'kimchi']);
 
-export const INITIAL_FOODS: Food[] = FOOD_LIST.map((f) =>
-  ALLERGEN_UNCERTAIN_IDS.has(f.id) ? { ...f, allergenUncertain: true } : f,
-);
+/**
+ * 1単位あたりの重さ(g)。重さで書かれた量を、辞書の単位に換算するのに使う。
+ * 米:1合(180ml)の生の米は約150g
+ */
+const GRAMS_PER_UNIT: Readonly<Record<string, number>> = { rice: 150 };
+
+export const INITIAL_FOODS: Food[] = FOOD_LIST.map((f) => ({
+  ...f,
+  allergenUncertain: ALLERGEN_UNCERTAIN_IDS.has(f.id),
+  gramsPerUnit: GRAMS_PER_UNIT[f.id] ?? null,
+}));

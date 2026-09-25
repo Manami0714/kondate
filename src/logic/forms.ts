@@ -53,6 +53,8 @@ export interface FoodDraft {
   allergens: Allergen[];
   /** アレルギー物質は要確認の印 */
   allergenUncertain: boolean;
+  /** 1単位あたりの重さ(g)。空欄ならわからない */
+  gramsPerUnit: string;
 }
 
 /** 辞書の食材を編集用の下書きにする */
@@ -68,6 +70,7 @@ export function foodToDraft(food: Food): FoodDraft {
     isCondiment: food.isCondiment,
     allergens: [...food.allergens],
     allergenUncertain: food.allergenUncertain,
+    gramsPerUnit: food.gramsPerUnit === null ? '' : String(food.gramsPerUnit),
   };
 }
 
@@ -91,6 +94,11 @@ export function validateFoodDraft(draft: FoodDraft, existing: readonly Food[], i
   const shelf = parseAmount(draft.shelfLifeDays);
   if (shelf === null || shelf <= 0 || !Number.isInteger(shelf)) errors.push('保存の目安日数は1以上の整数にしてください');
   if (draft.kind === '食材' && draft.foodGroup === null) errors.push('食品グループを選んでください');
+  let gramsPerUnit: number | null = null;
+  if (draft.gramsPerUnit.trim() !== '') {
+    gramsPerUnit = parseAmount(draft.gramsPerUnit);
+    if (gramsPerUnit === null || gramsPerUnit <= 0) errors.push('1単位あたりの重さは0より大きい数字にしてください(わからなければ空欄)');
+  }
   if (errors.length > 0) return { ok: false, errors };
   const aliases = splitList(draft.aliasesText).filter((a) => a !== name);
   return {
@@ -107,6 +115,8 @@ export function validateFoodDraft(draft: FoodDraft, existing: readonly Food[], i
       isCondiment: draft.kind === '食材' && draft.isCondiment,
       allergens: [...draft.allergens],
       allergenUncertain: draft.allergenUncertain,
+      // 単位が g なら換算しないので持たない
+      gramsPerUnit: unit === 'g' ? null : gramsPerUnit,
     },
   };
 }

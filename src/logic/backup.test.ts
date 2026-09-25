@@ -111,6 +111,7 @@ describe('版1のファイルの読み込み', () => {
       delete f.isCondiment;
       delete f.allergens;
       delete f.allergenUncertain;
+      delete f.gramsPerUnit;
     }
     for (const m of d.members) delete m.allergyAllergens;
     for (const r of d.recipes) for (const i of r.ingredients) delete i.main;
@@ -146,7 +147,7 @@ describe('版1のファイルの読み込み', () => {
     const data = sampleData();
     data.foods = [
       ...INITIAL_FOODS,
-      { id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5, isCondiment: true, allergens: ['大豆'], allergenUncertain: true },
+      { id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5, isCondiment: true, allergens: ['大豆'], allergenUncertain: true, gramsPerUnit: 40 },
     ];
     data.recipes = [
       ...INITIAL_RECIPES,
@@ -154,7 +155,7 @@ describe('版1のファイルの読み込み', () => {
     ];
     const r = parseBackup(toV1File(data));
     if (!r.ok) throw new Error(r.error);
-    expect(r.data.foods.find((f) => f.id === 'user_1')).toMatchObject({ isCondiment: false, allergens: [], allergenUncertain: false });
+    expect(r.data.foods.find((f) => f.id === 'user_1')).toMatchObject({ isCondiment: false, allergens: [], allergenUncertain: false, gramsPerUnit: null });
     expect(r.data.recipes.find((x) => x.id === 'my_1')?.ingredients.every((i) => !i.main)).toBe(true);
   });
 });
@@ -171,6 +172,18 @@ describe('版2のファイルの読み込み', () => {
   });
 });
 
+describe('版3のファイルの読み込み', () => {
+  it('食材の1単位あたりの重さがなくても、初期食材は初期データの値(米=150g)、ほかは空で読み込める', () => {
+    const raw = JSON.parse(serializeBackup(sampleData(), now));
+    raw.formatVersion = 3;
+    for (const f of raw.data.foods) delete f.gramsPerUnit;
+    const r = parseBackup(JSON.stringify(raw));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.data.foods.find((f) => f.id === 'rice')?.gramsPerUnit).toBe(150);
+    expect(r.data.foods.find((f) => f.id === 'egg')?.gramsPerUnit).toBeNull();
+  });
+});
+
 describe('壊れたファイルを拒否する', () => {
   it('JSON でないファイル', () => {
     const r = parseBackup('これはJSONではない');
@@ -183,7 +196,7 @@ describe('壊れたファイルを拒否する', () => {
   });
 
   it('新しい版の形式', () => {
-    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 3', '"formatVersion": 999');
+    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 4', '"formatVersion": 999');
     const r = parseBackup(text);
     expect(r.ok).toBe(false);
   });

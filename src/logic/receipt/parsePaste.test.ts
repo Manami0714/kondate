@@ -3,7 +3,7 @@ import { INITIAL_FOODS } from '../../data/foods';
 import type { Food, IgnoredWord } from '../../db/types';
 import { withAlias } from '../aliases';
 import { normalizeForSearch } from '../foodSearch';
-import { NET_SUPER_SAMPLE, RECEIPT_SAMPLE } from './fixtures';
+import { NET_SUPER_REAL_SAMPLE, NET_SUPER_SAMPLE, RECEIPT_SAMPLE } from './fixtures';
 import { cleanProductName, isDropLine, splitLines } from './lines';
 import { parseNetSuperLines } from './netSuper';
 import { parsePaste, productWord } from './parsePaste';
@@ -65,9 +65,9 @@ describe('レシート', () => {
   });
 });
 
-describe('ネットスーパー', () => {
+describe('ネットスーパー(架空の見本)', () => {
   it('2行に折り返した商品名を1商品にし、「N 点」を点数にする。前後の案内の行は商品にしない', () => {
-    const products = parseNetSuperLines(splitLines(NET_SUPER_SAMPLE));
+    const products = parseNetSuperLines(splitLines(NET_SUPER_SAMPLE), INITIAL_FOODS, []);
     expect(products.map((p) => [p.name, p.count])).toEqual([
       ['国産鶏モモ肉からあげ用(バラ凍結)500g', 1],
       ['産地直送豚肩ロース切りおとし250g', 1],
@@ -82,13 +82,13 @@ describe('ネットスーパー', () => {
     ]);
   });
 
-  it('読み取った・自信がない・読めなかったに分け、量×点数を辞書の単位にする', () => {
+  it('商品名が辞書とまったく同じなら読み取った、一部だけ合ったら自信がない。量×点数を辞書の単位にする', () => {
     const r = parsePaste(NET_SUPER_SAMPLE, INITIAL_FOODS, []);
     expect(r.source).toBe('ネットスーパー');
     expect(r.items.map((i) => [i.word, i.status, i.foodId, i.amount, i.note])).toEqual([
-      ['国産鶏モモ肉からあげ用(バラ凍結)', '読み取った', 'chicken_thigh', 500, null],
+      // 「鶏モモ肉」は商品名の一部だけなので、自信がない(一度選べば次から読み取った)
+      ['国産鶏モモ肉からあげ用(バラ凍結)', '自信がない', 'chicken_thigh', 500, null],
       ['産地直送豚肩ロース切りおとし', '読めなかった', null, 0, null],
-      // 食材名(ピーマン)があっても、できあいの料理らしいので自信がない
       ['やわらか肉詰めピーマン', '自信がない', 'green_pepper', 5, 'unit-mismatch'],
       ['白菜', '読み取った', 'chinese_cabbage', 0.25, null],
       ['大根', '読み取った', 'daikon', 0.5, null],
@@ -97,9 +97,80 @@ describe('ネットスーパー', () => {
       // 辞書は袋なので、ふつうの量(1袋)×2点
       ['えのき茸', '読み取った', 'enoki', 2, 'unit-mismatch'],
       // 12個180g のうち、辞書の単位(g)に合う方を使う
-      ['まろやかプロセスチーズ', '読み取った', 'cheese', 180, null],
+      ['まろやかプロセスチーズ', '自信がない', 'cheese', 180, null],
       ['ふんわりトイレットロール 12ロール', '読めなかった', null, 0, null],
       ['はちみつりんご', '読めなかった', null, 0, null],
+    ]);
+  });
+});
+
+describe('ネットスーパー(実物をテキスト認識でコピーした文字)', () => {
+  it('写真の文字を取り除き、量の行が前に来る形・冷蔵の印の2つの形・★の値段の行を読める', () => {
+    const products = parseNetSuperLines(splitLines(NET_SUPER_REAL_SAMPLE), INITIAL_FOODS, []);
+    expect(products.map((p) => [p.name, p.count])).toEqual([
+      // 「お届け商品」の後の「ベビーチーズ」(写真の文字)はつなげない
+      ['までっこ鶏モモ肉唐揚用徳用(バラ凍結)620g', 1],
+      ['ベビーチーズ 16個216g', 1],
+      ['なめこ 80g', 2],
+      ['200gx2豚徳用小間切(ペアパック)', 1],
+      ['おさかなソーセージ 4本240g', 1],
+      ['おまかせ産直米(無洗米)5kg', 1],
+      ['梨(あきづき)2玉', 1],
+      ['徳用NZ産有機サンゴールドキウイ(特大パック)800g', 1],
+      ['ごぼう 250g', 1],
+      ['えのき茸 200g', 1],
+    ]);
+  });
+
+  it('一部だけ合った品(魚肉ソーセージ→ウインナーなど)は自信がない。米5kgは1合150gで33.3合', () => {
+    const items = parsePaste(NET_SUPER_REAL_SAMPLE, INITIAL_FOODS, []).items;
+    expect(items.map((i) => [i.word, i.status, i.foodId, i.amount, i.note])).toEqual([
+      ['までっこ鶏モモ肉唐揚用徳用(バラ凍結)', '自信がない', 'chicken_thigh', 620, null],
+      ['ベビーチーズ', '自信がない', 'cheese', 216, null],
+      ['なめこ', '読み取った', 'nameko', 2, 'unit-mismatch'],
+      ['豚徳用小間切(ペアパック)', '読めなかった', null, 0, null],
+      ['おさかなソーセージ', '自信がない', 'sausage', 4, null],
+      ['おまかせ産直米(無洗米)', '自信がない', 'rice', 33.3, 'converted'],
+      ['梨(あきづき)', '読めなかった', null, 0, null],
+      ['徳用NZ産有機サンゴールドキウイ(特大パック)', '読めなかった', null, 0, null],
+      ['ごぼう', '読み取った', 'burdock', 1, 'unit-mismatch'],
+      ['えのき茸', '読み取った', 'enoki', 1, 'unit-mismatch'],
+    ]);
+  });
+});
+
+describe('写真の文字への対策', () => {
+  const names = (lines: string[], ignored: IgnoredWord[] = []) =>
+    parseNetSuperLines(splitLines(lines.join('\n')), INITIAL_FOODS, ignored).map((p) => [p.name, p.count, p.split]);
+
+  it('冷蔵・冷凍の印がなくても、ほかの商品名に含まれる行はつなげない', () => {
+    expect(names(['ベビーチーズ', 'ごぼう 250g', '1点 204円★', 'ベビーチーズ 16個216g', '1点 549円★'])).toEqual([
+      ['ごぼう 250g', 1, false],
+      ['ベビーチーズ 16個216g', 1, false],
+    ]);
+  });
+
+  it('読まない言葉とまったく同じ行はつなげない', () => {
+    const ignored: IgnoredWord[] = [{ word: normalizeForSearch('ハッピーボックス'), label: 'ハッピーボックス', addedAt: '' }];
+    expect(names(['ハッピーボックス', 'ごぼう 250g', '1点 204円★'], ignored)).toEqual([['ごぼう 250g', 1, false]]);
+  });
+
+  it('同じ商品を2回買ったときは、お互いを写真の文字として消さない', () => {
+    expect(names(['ごぼう 250g', '1点 204円★', 'ごぼう 250g', '1点 204円★'])).toEqual([
+      ['ごぼう 250g', 1, false],
+      ['ごぼう 250g', 1, false],
+    ]);
+  });
+
+  it('つなげた商品名から2つの食材が見つかったら、行で分けて読み、どちらも自信がないにする。点数は後ろの商品につける', () => {
+    expect(names(['キャベツ', '200g', 'ごぼう', '2点 204円★'])).toEqual([
+      ['キャベツ200g', 1, true],
+      ['ごぼう', 2, true],
+    ]);
+    const items = parsePaste(['キャベツ', '200g', 'ごぼう', '2点 204円★'].join('\n'), INITIAL_FOODS, []).items;
+    expect(items.map((i) => [i.word, i.status, i.foodId, i.count])).toEqual([
+      ['キャベツ', '自信がない', 'cabbage', 1],
+      ['ごぼう', '自信がない', 'burdock', 2],
     ]);
   });
 });

@@ -110,7 +110,7 @@ describe('版1からの移行', () => {
       Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
     // 版1のころにはなかった食材(なめこ)とレシピ(なめこの味噌汁)は入れない
     await old.table('foods').bulkAdd(
-      INITIAL_FOODS.filter((f) => f.id !== 'nameko').map((f) => strip(f, ['isCondiment', 'allergens', 'allergenUncertain'])),
+      INITIAL_FOODS.filter((f) => f.id !== 'nameko').map((f) => strip(f, ['isCondiment', 'allergens', 'allergenUncertain', 'gramsPerUnit'])),
     );
     await old.table('foods').add({ id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5 });
     const v1Recipe = (r: (typeof INITIAL_RECIPES)[number]) => ({
@@ -130,7 +130,9 @@ describe('版1からの移行', () => {
     expect(await db.foods.get('soy_sauce')).toMatchObject({ isCondiment: false, allergens: ['小麦', '大豆'] });
     expect(await db.foods.get('ginger')).toMatchObject({ isCondiment: true });
     expect(await db.foods.get('salad_oil')).toMatchObject({ allergenUncertain: true });
-    expect(await db.foods.get('user_1')).toMatchObject({ isCondiment: false, allergens: [], allergenUncertain: false });
+    expect(await db.foods.get('user_1')).toMatchObject({ isCondiment: false, allergens: [], allergenUncertain: false, gramsPerUnit: null });
+    // 版5:米には1合=150gが入る
+    expect((await db.foods.get('rice'))?.gramsPerUnit).toBe(150);
     const nikujaga = await db.recipes.get('init_nikujaga');
     expect(nikujaga?.ingredients.filter((i) => i.main).map((i) => i.foodId)).toEqual(['beef_koma', 'potato']);
     expect((await db.recipes.get('my_1'))?.ingredients.every((i) => i.main === false)).toBe(true);
