@@ -1,4 +1,5 @@
 // データの型。SPEC.md 3章に対応する
+import type { Allergen } from '../data/allergens';
 import type { CookingMethod, Flavor } from '../data/tags';
 
 /** 日付(YYYY-MM-DD) */
@@ -27,6 +28,12 @@ export interface Food {
   foodGroup: FoodGroup | null;
   /** 保存の目安日数 */
   shelfLifeDays: number;
+  /** 薬味の印。薬味は主な材料にしない */
+  isCondiment: boolean;
+  /** 含まれるアレルギー物質(一般的に含まれることが多いもの) */
+  allergens: Allergen[];
+  /** アレルギー物質は要確認の印。商品によって差が大きく、上の一覧に自信がない食材 */
+  allergenUncertain: boolean;
 }
 
 /** 在庫。食材ごとに1行 */
@@ -54,11 +61,14 @@ export interface Member {
   sex: Sex;
   age: number;
   appetite: Appetite;
-  /** 手で決めた1人分の倍率。null なら自動(自動の値はフェーズ2で決める) */
+  /** 手で決めた1人分の倍率。null なら年齢・性別・食べる量から自動で決める */
   portionOverride: number | null;
   likedFoodIds: string[];
   dislikedFoodIds: string[];
+  /** アレルギーの食材(食材そのもので指定) */
   allergyFoodIds: string[];
+  /** アレルギー物質(29品目から選ぶ) */
+  allergyAllergens: Allergen[];
   likedMethods: CookingMethod[];
   dislikedMethods: CookingMethod[];
   likedFlavors: Flavor[];
@@ -72,6 +82,8 @@ export interface HouseholdPrefs {
   id: 'household';
   methodFrequency: Record<CookingMethod, Frequency>;
   dislikedFlavors: Flavor[];
+  /** 1食あたりの買い足し品数の上限 */
+  shoppingLimitPerMeal: number;
 }
 
 export type Course = '主菜' | '副菜' | '汁物';
@@ -82,6 +94,8 @@ export interface RecipeIngredient {
   foodId: string;
   /** 食材辞書の単位での量 */
   amount: number;
+  /** 主な材料の印。「同じ1食の中でかぶらない」の判定に使う */
+  main: boolean;
 }
 
 export interface Recipe {
@@ -122,6 +136,37 @@ export interface ReservedFood {
   dayIndex: number;
   foodId: string;
   amount: number;
+  /** 減らす前の在庫の追加日。在庫が消えた食材を戻すとき、追加日まで元どおりにするため */
+  addedDate: DateString | null;
+}
+
+/** らくらく/ふつう/しっかり */
+export type TimePreset = 'らくらく' | 'ふつう' | 'しっかり';
+
+/** 献立を作ったときに選んだ条件 */
+export interface PlanConditions {
+  preset: TimePreset;
+  /** 1品の最大調理時間(分)。null なら上限なし */
+  maxMinutes: number | null;
+  maxDifficulty: Difficulty;
+  /** 「誰向け」で選んだメンバー。選ばなければ null */
+  forMemberId: string | null;
+}
+
+/** ゲストの滞在。日付で持つので、献立セットをまたいでも引き継げる */
+export interface GuestStay {
+  memberId: string;
+  fromDate: DateString;
+  toDate: DateString;
+}
+
+/** 買い足しリストの1行(どの日の分か、ごとに持つ) */
+export interface ShoppingItem {
+  dayIndex: number;
+  foodId: string;
+  /** 足りない量 */
+  amount: number;
+  bought: boolean;
 }
 
 export interface MealSet {
@@ -130,6 +175,11 @@ export interface MealSet {
   days: MealDay[];
   status: MealStatus;
   reserved: ReservedFood[];
+  conditions: PlanConditions;
+  guests: GuestStay[];
+  shopping: ShoppingItem[];
+  /** 買い足しの上限を緩めて組んだ日(0始まり) */
+  overLimitDays: number[];
 }
 
 export type StockMoveReason = '購入' | '夕飯' | '昼食' | '手直し' | 'キャンセルで戻す';

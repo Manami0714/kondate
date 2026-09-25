@@ -1,5 +1,6 @@
 // 全データの書き出し・読み込み(純粋関数)
 import { BACKUP_FORMAT_VERSION } from '../config/app';
+import { ALLERGENS } from '../data/allergens';
 import { COOKING_METHODS, FLAVORS, type CookingMethod } from '../data/tags';
 import {
   TABLE_NAMES,
@@ -12,11 +13,13 @@ import {
   type MealStatus,
   type Member,
   type PantryItem,
+  type PlanConditions,
   type Recipe,
   type Stock,
   type StockMove,
 } from '../db/types';
 import { toDateTimeString } from './date';
+import { upgradeBackupDataV1 } from './migrate';
 import {
   ValidationError,
   arr,
@@ -81,6 +84,8 @@ export function parseBackup(text: string): ParseResult {
     }
     const exportedAt = str(root, 'exportedAt', 'ファイル');
     const d = obj(root.data, 'data');
+    // 版1のファイルは、足りない項目を補ってから確かめる
+    if (version < 2) upgradeBackupDataV1(d);
     const data: AllData = {
       foods: arr(d, 'foods', 'data').map((v, i) => parseFood(v, `食材辞書[${i}]`)),
       stocks: arr(d, 'stocks', 'data').map((v, i) => parseStock(v, `在庫[${i}]`)),
@@ -120,6 +125,9 @@ function parseFood(v: unknown, p: string): Food {
     kind: oneOf(o, 'kind', ['食材', '調味料'] as const, p),
     foodGroup: o.foodGroup === null ? null : oneOf(o, 'foodGroup', ['赤', '緑', '黄'] as const, p),
     shelfLifeDays: num(o, 'shelfLifeDays', p),
+    isCondiment: bool(o, 'isCondiment', p),
+    allergens: oneOfArr(o, 'allergens', ALLERGENS, p),
+    allergenUncertain: bool(o, 'allergenUncertain', p),
   };
 }
 
@@ -146,6 +154,7 @@ function parseMember(v: unknown, p: string): Member {
     likedFoodIds: strArr(o, 'likedFoodIds', p),
     dislikedFoodIds: strArr(o, 'dislikedFoodIds', p),
     allergyFoodIds: strArr(o, 'allergyFoodIds', p),
+    allergyAllergens: oneOfArr(o, 'allergyAllergens', ALLERGENS, p),
     likedMethods: oneOfArr(o, 'likedMethods', COOKING_METHODS, p),
     dislikedMethods: oneOfArr(o, 'dislikedMethods', COOKING_METHODS, p),
     likedFlavors: oneOfArr(o, 'likedFlavors', FLAVORS, p),
@@ -160,7 +169,12 @@ function parseHousehold(v: unknown, p: string): HouseholdPrefs {
   const methodFrequency = Object.fromEntries(
     COOKING_METHODS.map((m) => [m, oneOf(freq, m, ['好き', 'ふつう', '苦手'] as const, `${p}.methodFrequency`)]),
   ) as Record<CookingMethod, Frequency>;
-  return { id: 'household', methodFrequency, dislikedFlavors: oneOfArr(o, 'dislikedFlavors', FLAVORS, p) };
+  return {
+    id: 'household',
+    methodFrequency,
+    dislikedFlavors: oneOfArr(o, 'dislikedFlavors', FLAVORS, p),
+    shoppingLimitPerMeal: num(o, 'shoppingLimitPerMeal', p),
+  };
 }
 
 function parseRecipe(v: unknown, p: string): Recipe {
@@ -172,7 +186,7 @@ function parseRecipe(v: unknown, p: string): Recipe {
     ingredients: arr(o, 'ingredients', p).map((iv, i) => {
       const ip = `${p}.ingredients[${i}]`;
       const io = obj(iv, ip);
-      return { foodId: str(io, 'foodId', ip), amount: num(io, 'amount', ip) };
+      return { foodId: str(io, 'foodId', ip), amount: num(io, 'amount', ip), main: bool(io, 'main', ip) };
     }),
     servings: num(o, 'servings', p),
     minutes: num(o, 'minutes', p),
@@ -209,8 +223,43 @@ function parseMealSet(v: unknown, p: string): MealSet {
     reserved: arr(o, 'reserved', p).map((rv, i) => {
       const rp = `${p}.reserved[${i}]`;
       const r = obj(rv, rp);
-      return { dayIndex: num(r, 'dayIndex', rp), foodId: str(r, 'foodId', rp), amount: num(r, 'amount', rp) };
+      return {
+        dayIndex: num(r, 'dayIndex', rp),
+        foodId: str(r, 'foodId', rp),
+        amount: num(r, 'amount', rp),
+        addedDate: strOrNull(r, 'addedDate', rp),
+      };
     }),
+    conditions: parseConditions(o.conditions, `${p}.conditions`),
+    guests: arr(o, 'guests', p).map((gv, i) => {
+      const gp = `${p}.guests[${i}]`;
+      const g = obj(gv, gp);
+      return { memberId: str(g, 'memberId', gp), fromDate: str(g, 'fromDate', gp), toDate: str(g, 'toDate', gp) };
+    }),
+    shopping: arr(o, 'shopping', p).map((sv, i) => {
+      const sp = `${p}.shopping[${i}]`;
+      const s = obj(sv, sp);
+      return {
+        dayIndex: num(s, 'dayIndex', sp),
+        foodId: str(s, 'foodId', sp),
+        amount: num(s, 'amount', sp),
+        bought: bool(s, 'bought', sp),
+      };
+    }),
+    overLimitDays: arr(o, 'overLimitDays', p).map((v, i) => {
+      if (typeof v !== 'number') fail(`${p}.overLimitDays[${i}]`, '数字');
+      return v;
+    }),
+  };
+}
+
+function parseConditions(v: unknown, p: string): PlanConditions {
+  const o = obj(v, p);
+  return {
+    preset: oneOf(o, 'preset', ['らくらく', 'ふつう', 'しっかり'] as const, p),
+    maxMinutes: numOrNull(o, 'maxMinutes', p),
+    maxDifficulty: oneOf(o, 'maxDifficulty', [1, 2, 3] as const, p),
+    forMemberId: strOrNull(o, 'forMemberId', p),
   };
 }
 

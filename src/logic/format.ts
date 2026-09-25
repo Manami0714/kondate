@@ -35,3 +35,20 @@ export const DIFFICULTY_LABELS: Record<1 | 2 | 3, string> = {
   2: 'ふつう',
   3: 'むずかしい',
 };
+
+/**
+ * 人数に合わせて計算した量を、見やすく丸める(表示用。在庫の計算には使わない)
+ * - g・ml は整数
+ * - そのほかの単位は 1/4 きざみ
+ * - 0 より大きい量は、丸めても 0 にしない
+ */
+export function roundForDisplay(amount: number, unit: string): number {
+  if (amount <= 0) return 0;
+  if (DECIMAL_UNITS.has(unit)) return Math.max(1, Math.round(amount));
+  return Math.max(0.25, Math.round(amount * 4) / 4);
+}
+
+/** 計算した量の表示。「1.13大さじ」→「1と1/4大さじ」、「11.34g」→「11g」 */
+export function formatApproxAmount(amount: number, unit: string): string {
+  return formatAmount(roundForDisplay(amount, unit), unit);
+}

@@ -9,6 +9,7 @@ import type { Course, Difficulty, Food, Recipe } from '../db/types';
 import { validateRecipeDraft, type RecipeDraft } from '../logic/forms';
 import { DIFFICULTY_LABELS, amountToInput } from '../logic/format';
 import { randomId } from '../logic/id';
+import { canBeMain } from '../logic/planner/mainFoods';
 
 interface Props {
   recipe: Recipe | null;
@@ -35,7 +36,7 @@ function toDraft(r: Recipe | null): RecipeDraft {
   return {
     name: r.name,
     course: r.course,
-    ingredients: r.ingredients.map((i) => ({ foodId: i.foodId, amount: amountToInput(i.amount) })),
+    ingredients: r.ingredients.map((i) => ({ foodId: i.foodId, amount: amountToInput(i.amount), main: i.main })),
     servings: String(r.servings),
     minutes: String(r.minutes),
     difficulty: r.difficulty,
@@ -58,9 +59,14 @@ export function RecipeForm({ recipe, foods, byId, onDone }: Props) {
       'ingredients',
       draft.ingredients.map((ing, i) => (i === index ? { ...ing, amount } : ing)),
     );
+  const toggleMain = (index: number) =>
+    set(
+      'ingredients',
+      draft.ingredients.map((ing, i) => (i === index ? { ...ing, main: !ing.main } : ing)),
+    );
 
   const save = async () => {
-    const result = validateRecipeDraft(draft, recipe?.id ?? `my_${randomId()}`);
+    const result = validateRecipeDraft(draft, recipe?.id ?? `my_${randomId()}`, byId);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -99,6 +105,19 @@ export function RecipeForm({ recipe, foods, byId, onDone }: Props) {
             return (
               <div key={ing.foodId} className="ingredient-row">
                 <span>{food?.name ?? '(辞書にない食材)'}</span>
+                {canBeMain(food) ? (
+                  <button
+                    type="button"
+                    className={`chip${ing.main ? ' is-on' : ''}`}
+                    aria-pressed={ing.main}
+                    aria-label={`${food?.name ?? ''}を主な材料にする`}
+                    onClick={() => toggleMain(i)}
+                  >
+                    主
+                  </button>
+                ) : (
+                  <span />
+                )}
                 <div className="input-with-unit">
                   <input
                     className="input"
@@ -124,7 +143,9 @@ export function RecipeForm({ recipe, foods, byId, onDone }: Props) {
       <button type="button" className="btn btn-block" onClick={() => setPicking(true)}>
         ＋ 材料を追加
       </button>
-      <span className="field-hint">量は食材ごとの単位で入れます。「1/4」のような分数も使えます</span>
+      <span className="field-hint">
+        量は食材ごとの単位で入れます。「1/4」のような分数も使えます。料理の中心になる材料(1〜2個)は「主」をタップします
+      </span>
 
       <h3 className="section-title">時間・難易度</h3>
       <Field label="調理時間">
@@ -167,7 +188,7 @@ export function RecipeForm({ recipe, foods, byId, onDone }: Props) {
             excludeIds={draft.ingredients.map((i) => i.foodId)}
             allowAddNew
             onPick={(food) => {
-              set('ingredients', [...draft.ingredients, { foodId: food.id, amount: '' }]);
+              set('ingredients', [...draft.ingredients, { foodId: food.id, amount: '', main: false }]);
               setPicking(false);
             }}
           />

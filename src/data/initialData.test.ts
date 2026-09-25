@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { normalizeForSearch } from '../logic/foodSearch';
 import { INITIAL_FOODS } from './foods';
 import { INITIAL_RECIPES } from './recipes';
+import { canBeMain } from '../logic/planner/mainFoods';
+import { ALLERGENS } from './allergens';
 import { COOKING_METHODS, FLAVORS } from './tags';
 
 const foodIds = new Set(INITIAL_FOODS.map((f) => f.id));
@@ -29,6 +31,25 @@ describe('食材辞書の初期データ', () => {
     }
   });
 
+  it('アレルギー物質は29品目の中から、重複なし', () => {
+    expect(ALLERGENS.length).toBe(29);
+    for (const f of INITIAL_FOODS) {
+      for (const a of f.allergens) expect(ALLERGENS, f.id).toContain(a);
+      expect(new Set(f.allergens).size, f.id).toBe(f.allergens.length);
+    }
+  });
+
+  it('要確認の印は顆粒だし・サラダ油・ケチャップ・キムチ', () => {
+    expect(INITIAL_FOODS.filter((f) => f.allergenUncertain).map((f) => f.id).sort()).toEqual(['dashi', 'ketchup', 'kimchi', 'salad_oil']);
+  });
+
+  it('薬味は食材だけ', () => {
+    for (const f of INITIAL_FOODS) if (f.isCondiment) expect(f.kind, f.id).toBe('食材');
+    expect(INITIAL_FOODS.filter((f) => f.isCondiment).map((f) => f.name)).toEqual(
+      expect.arrayContaining(['長ねぎ', 'しょうが', 'にんにく', '大葉']),
+    );
+  });
+
   it('ふつうの量と保存日数が正の数', () => {
     for (const f of INITIAL_FOODS) {
       expect(f.usualAmount, f.id).toBeGreaterThan(0);
@@ -42,12 +63,15 @@ describe('初期レシピ', () => {
     expect(new Set(INITIAL_RECIPES.map((r) => r.id)).size).toBe(INITIAL_RECIPES.length);
   });
 
-  it('主菜・副菜・汁物がそれぞれ10件前後ある', () => {
+  it('主菜・副菜・汁物がそれぞれ50件以上ある(追加2回目まで)', () => {
     for (const course of ['主菜', '副菜', '汁物'] as const) {
-      const n = INITIAL_RECIPES.filter((r) => r.course === course).length;
-      expect(n, course).toBeGreaterThanOrEqual(8);
-      expect(n, course).toBeLessThanOrEqual(12);
+      expect(INITIAL_RECIPES.filter((r) => r.course === course).length, course).toBeGreaterThanOrEqual(50);
     }
+  });
+
+  it('料理名が重複していない', () => {
+    const names = INITIAL_RECIPES.map((r) => r.name);
+    expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([]);
   });
 
   it('材料がすべて食材辞書にあり、量が正の数', () => {
@@ -63,6 +87,16 @@ describe('初期レシピ', () => {
     for (const r of INITIAL_RECIPES) {
       const ids = r.ingredients.map((i) => i.foodId);
       expect(new Set(ids).size, r.name).toBe(ids.length);
+    }
+  });
+
+  it('主な材料が1〜2個あり、薬味・調味料ではない', () => {
+    const byId = new Map(INITIAL_FOODS.map((f) => [f.id, f]));
+    for (const r of INITIAL_RECIPES) {
+      const mains = r.ingredients.filter((i) => i.main);
+      expect(mains.length, r.name).toBeGreaterThanOrEqual(1);
+      expect(mains.length, r.name).toBeLessThanOrEqual(2);
+      for (const m of mains) expect(canBeMain(byId.get(m.foodId)), `${r.name} の ${m.foodId}`).toBe(true);
     }
   });
 

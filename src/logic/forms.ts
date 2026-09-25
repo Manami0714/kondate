@@ -1,4 +1,5 @@
 // 入力フォームの内容を確かめて、保存する形にする(純粋関数)
+import type { Allergen } from '../data/allergens';
 import type { CookingMethod, Flavor } from '../data/tags';
 import type {
   Appetite,
@@ -13,6 +14,7 @@ import type {
   Sex,
 } from '../db/types';
 import { findFoodByExactName } from './foodSearch';
+import { canBeMain } from './planner/mainFoods';
 
 export type FormResult<T> = { ok: true; value: T } | { ok: false, errors: string[] };
 
@@ -46,13 +48,42 @@ export interface FoodDraft {
   kind: FoodKind;
   foodGroup: FoodGroup | null;
   shelfLifeDays: string;
+  /** 薬味の印(食材のときだけ) */
+  isCondiment: boolean;
+  allergens: Allergen[];
+  /** アレルギー物質は要確認の印 */
+  allergenUncertain: boolean;
 }
 
+/** 辞書の食材を編集用の下書きにする */
+export function foodToDraft(food: Food): FoodDraft {
+  return {
+    name: food.name,
+    aliasesText: food.aliases.join('、'),
+    unit: food.unit,
+    usualAmount: String(food.usualAmount),
+    kind: food.kind,
+    foodGroup: food.foodGroup,
+    shelfLifeDays: String(food.shelfLifeDays),
+    isCondiment: food.isCondiment,
+    allergens: [...food.allergens],
+    allergenUncertain: food.allergenUncertain,
+  };
+}
+
+/**
+ * 食材の入力を確かめる。id が辞書にある食材なら編集として扱い、その食材自身とは重複を比べない
+ */
 export function validateFoodDraft(draft: FoodDraft, existing: readonly Food[], id: string): FormResult<Food> {
   const errors: string[] = [];
+  const others = existing.filter((f) => f.id !== id);
   const name = draft.name.trim();
   if (name === '') errors.push('食材名を入れてください');
-  else if (findFoodByExactName(existing, name)) errors.push(`「${name}」はすでに辞書にあります`);
+  else if (findFoodByExactName(others, name)) errors.push(`「${name}」はすでに辞書にあります`);
+  for (const alias of splitList(draft.aliasesText)) {
+    const dup = alias !== name ? findFoodByExactName(others, alias) : undefined;
+    if (dup) errors.push(`別名「${alias}」は「${dup.name}」で使われています`);
+  }
   const unit = draft.unit.trim();
   if (unit === '') errors.push('単位を入れてください');
   const usualAmount = parseAmount(draft.usualAmount);
@@ -73,6 +104,9 @@ export function validateFoodDraft(draft: FoodDraft, existing: readonly Food[], i
       kind: draft.kind,
       foodGroup: draft.kind === '調味料' ? null : draft.foodGroup,
       shelfLifeDays: shelf as number,
+      isCondiment: draft.kind === '食材' && draft.isCondiment,
+      allergens: [...draft.allergens],
+      allergenUncertain: draft.allergenUncertain,
     },
   };
 }
@@ -98,6 +132,7 @@ export interface MemberDraft {
   likedFoodIds: string[];
   dislikedFoodIds: string[];
   allergyFoodIds: string[];
+  allergyAllergens: Allergen[];
   likedMethods: CookingMethod[];
   dislikedMethods: CookingMethod[];
   likedFlavors: Flavor[];
@@ -135,6 +170,7 @@ export function validateMemberDraft(draft: MemberDraft, id: string): FormResult<
       likedFoodIds: [...draft.likedFoodIds],
       dislikedFoodIds: [...draft.dislikedFoodIds],
       allergyFoodIds: [...draft.allergyFoodIds],
+      allergyAllergens: [...draft.allergyAllergens],
       likedMethods: [...draft.likedMethods],
       dislikedMethods: [...draft.dislikedMethods],
       likedFlavors: [...draft.likedFlavors],
@@ -148,7 +184,7 @@ export function validateMemberDraft(draft: MemberDraft, id: string): FormResult<
 export interface RecipeDraft {
   name: string;
   course: Course;
-  ingredients: { foodId: string; amount: string }[];
+  ingredients: { foodId: string; amount: string; main: boolean }[];
   servings: string;
   minutes: string;
   difficulty: Difficulty;
@@ -159,7 +195,11 @@ export interface RecipeDraft {
   favorite: boolean;
 }
 
-export function validateRecipeDraft(draft: RecipeDraft, id: string): FormResult<Recipe> {
+export function validateRecipeDraft(
+  draft: RecipeDraft,
+  id: string,
+  byId: ReadonlyMap<string, Food>,
+): FormResult<Recipe> {
   const errors: string[] = [];
   const name = draft.name.trim();
   if (name === '') errors.push('料理名を入れてください');
@@ -169,8 +209,11 @@ export function validateRecipeDraft(draft: RecipeDraft, id: string): FormResult<
   const ingredients = draft.ingredients.map((ing, i) => {
     const amount = parseAmount(ing.amount);
     if (amount === null || amount <= 0) errors.push(`材料${i + 1}つ目の量を0より大きい数字にしてください`);
-    return { foodId: ing.foodId, amount: amount ?? 0 };
+    return { foodId: ing.foodId, amount: amount ?? 0, main: ing.main };
   });
+  const mains = draft.ingredients.filter((i) => i.main);
+  if (draft.ingredients.length > 0 && mains.length === 0) errors.push('主な材料を1つ以上選んでください');
+  if (mains.some((i) => !canBeMain(byId.get(i.foodId)))) errors.push('薬味と調味料は主な材料にできません');
   const servings = parseAmount(draft.servings);
   if (servings === null || servings <= 0 || !Number.isInteger(servings)) errors.push('基準の人数は1以上の整数にしてください');
   const minutes = parseAmount(draft.minutes);

@@ -25,6 +25,7 @@ function sampleData(): AllData {
         likedFoodIds: ['spinach'],
         dislikedFoodIds: [],
         allergyFoodIds: ['shrimp'],
+        allergyAllergens: ['小麦'],
         likedMethods: ['煮物'],
         dislikedMethods: ['揚げ物'],
         likedFlavors: ['味噌'],
@@ -41,6 +42,7 @@ function sampleData(): AllData {
         likedFoodIds: [],
         dislikedFoodIds: ['green_pepper'],
         allergyFoodIds: [],
+        allergyAllergens: [],
         likedMethods: [],
         dislikedMethods: [],
         likedFlavors: [],
@@ -57,7 +59,11 @@ function sampleData(): AllData {
           { date: '2026-09-25', mainId: 'init_nikujaga', sideId: 'init_kinpira', soupId: 'init_tonjiru', memberIds: ['m1'], status: '予定' },
         ],
         status: '予定',
-        reserved: [{ dayIndex: 0, foodId: 'potato', amount: 3 }],
+        reserved: [{ dayIndex: 0, foodId: 'potato', amount: 3, addedDate: '2026-09-20' }],
+        conditions: { preset: 'しっかり', maxMinutes: null, maxDifficulty: 3, forMemberId: 'm1' },
+        guests: [{ memberId: 'm2', fromDate: '2026-09-25', toDate: '2026-09-26' }],
+        shopping: [{ dayIndex: 0, foodId: 'onion', amount: 1, bought: false }],
+        overLimitDays: [0],
       },
     ],
     stockMoves: [
@@ -91,6 +97,64 @@ describe('書き出しと読み込み', () => {
   });
 });
 
+describe('版1のファイルの読み込み', () => {
+  /** 版2のデータから、版2で足した項目を消して版1のファイルにする */
+  function toV1File(data: AllData): string {
+    const raw = JSON.parse(serializeBackup(data, now));
+    raw.formatVersion = 1;
+    const d = raw.data;
+    for (const f of d.foods) {
+      delete f.isCondiment;
+      delete f.allergens;
+      delete f.allergenUncertain;
+    }
+    for (const m of d.members) delete m.allergyAllergens;
+    for (const r of d.recipes) for (const i of r.ingredients) delete i.main;
+    for (const h of d.household) delete h.shoppingLimitPerMeal;
+    for (const ms of d.mealSets) {
+      delete ms.conditions;
+      delete ms.guests;
+      delete ms.shopping;
+      delete ms.overLimitDays;
+      for (const r of ms.reserved) delete r.addedDate;
+    }
+    return JSON.stringify(raw);
+  }
+
+  it('足りない項目を補って読み込める(初期食材・初期レシピは初期データの値になる)', () => {
+    const data = sampleData();
+    const r = parseBackup(toV1File(data));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.data.foods).toEqual(INITIAL_FOODS);
+    expect(r.data.recipes).toEqual(INITIAL_RECIPES);
+    expect(r.data.members.map((m) => m.allergyAllergens)).toEqual([[], []]);
+    expect(r.data.household[0].shoppingLimitPerMeal).toBe(2);
+    expect(r.data.mealSets[0]).toMatchObject({
+      guests: [],
+      shopping: [],
+      overLimitDays: [],
+      conditions: { preset: 'ふつう', maxMinutes: 40, maxDifficulty: 2, forMemberId: null },
+      reserved: [{ dayIndex: 0, foodId: 'potato', amount: 3, addedDate: null }],
+    });
+  });
+
+  it('辞書に自分で足した食材とマイレシピは、印なし・アレルギー物質なしになる', () => {
+    const data = sampleData();
+    data.foods = [
+      ...INITIAL_FOODS,
+      { id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5, isCondiment: true, allergens: ['大豆'], allergenUncertain: true },
+    ];
+    data.recipes = [
+      ...INITIAL_RECIPES,
+      { ...INITIAL_RECIPES[0], id: 'my_1', source: 'マイレシピ' },
+    ];
+    const r = parseBackup(toV1File(data));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.data.foods.find((f) => f.id === 'user_1')).toMatchObject({ isCondiment: false, allergens: [], allergenUncertain: false });
+    expect(r.data.recipes.find((x) => x.id === 'my_1')?.ingredients.every((i) => !i.main)).toBe(true);
+  });
+});
+
 describe('壊れたファイルを拒否する', () => {
   it('JSON でないファイル', () => {
     const r = parseBackup('これはJSONではない');
@@ -98,12 +162,12 @@ describe('壊れたファイルを拒否する', () => {
   });
 
   it('ほかのアプリのファイル', () => {
-    const r = parseBackup(JSON.stringify({ app: 'other', formatVersion: 1, exportedAt: '', data: {} }));
+    const r = parseBackup(JSON.stringify({ app: 'other', formatVersion: 2, exportedAt: '', data: {} }));
     expect(r.ok).toBe(false);
   });
 
   it('新しい版の形式', () => {
-    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 1', '"formatVersion": 999');
+    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 2', '"formatVersion": 999');
     const r = parseBackup(text);
     expect(r.ok).toBe(false);
   });

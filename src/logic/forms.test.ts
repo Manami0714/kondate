@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { INITIAL_FOODS } from '../data/foods';
+import type { Food } from '../db/types';
 import {
   parseAmount,
   splitList,
+  foodToDraft,
   validateFoodDraft,
   validateMemberDraft,
   validateRecipeDraft,
@@ -43,6 +45,9 @@ describe('食材辞書への追加', () => {
     kind: '食材',
     foodGroup: '緑',
     shelfLifeDays: '5',
+    isCondiment: false,
+    allergens: [],
+    allergenUncertain: false,
   };
 
   it('正しく入れると食材になる', () => {
@@ -58,8 +63,42 @@ describe('食材辞書への追加', () => {
         kind: '食材',
         foodGroup: '緑',
         shelfLifeDays: 5,
+        isCondiment: false,
+        allergens: [],
+        allergenUncertain: false,
       },
     });
+  });
+
+  it('要確認の印が保存される', () => {
+    const r = validateFoodDraft({ ...base, allergenUncertain: true }, INITIAL_FOODS, 'new1');
+    expect(r.ok && r.value.allergenUncertain).toBe(true);
+  });
+
+  it('編集では自分自身の名前・別名とは重複にならない', () => {
+    const egg = INITIAL_FOODS.find((f) => f.id === 'egg');
+    if (!egg) throw new Error('卵がない');
+    const r = validateFoodDraft({ ...foodToDraft(egg), allergens: ['卵'], allergenUncertain: true }, INITIAL_FOODS, 'egg');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toEqual({ ...egg, allergenUncertain: true });
+  });
+
+  it('ほかの食材の名前を別名にするとエラー', () => {
+    const r = validateFoodDraft({ ...base, aliasesText: 'ｽﾞｯｷｰﾆ、玉子' }, INITIAL_FOODS, 'new1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toContain('別名「玉子」は「卵」で使われています');
+  });
+
+  it('薬味の印とアレルギー物質が保存される。調味料は薬味にならない', () => {
+    const r = validateFoodDraft({ ...base, name: 'みょうが', isCondiment: true, allergens: [] }, INITIAL_FOODS, 'x');
+    expect(r.ok && r.value.isCondiment).toBe(true);
+    const s = validateFoodDraft(
+      { ...base, name: '白だし', kind: '調味料', foodGroup: null, isCondiment: true, allergens: ['小麦', '大豆'] },
+      INITIAL_FOODS,
+      'y',
+    );
+    expect(s.ok && s.value.isCondiment).toBe(false);
+    expect(s.ok && s.value.allergens).toEqual(['小麦', '大豆']);
   });
 
   it('すでにある名前・別名は追加できない', () => {
@@ -85,6 +124,7 @@ describe('メンバー', () => {
     likedFoodIds: [],
     dislikedFoodIds: [],
     allergyFoodIds: [],
+    allergyAllergens: [],
     likedMethods: [],
     dislikedMethods: [],
     likedFlavors: [],
@@ -113,12 +153,13 @@ describe('メンバー', () => {
 });
 
 describe('マイレシピ', () => {
+  const byId = new Map<string, Food>(INITIAL_FOODS.map((f) => [f.id, f]));
   const base: RecipeDraft = {
     name: '卵焼き',
     course: '副菜',
     ingredients: [
-      { foodId: 'egg', amount: '3' },
-      { foodId: 'sugar', amount: '1/2' },
+      { foodId: 'egg', amount: '3', main: true },
+      { foodId: 'sugar', amount: '1/2', main: false },
     ],
     servings: '2',
     minutes: '10',
@@ -130,23 +171,40 @@ describe('マイレシピ', () => {
   };
 
   it('正しく入れるとマイレシピになる(空の手順行は除く)', () => {
-    const r = validateRecipeDraft(base, 'r1');
+    const r = validateRecipeDraft(base, 'r1', byId);
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.source).toBe('マイレシピ');
       expect(r.value.ingredients).toEqual([
-        { foodId: 'egg', amount: 3 },
-        { foodId: 'sugar', amount: 0.5 },
+        { foodId: 'egg', amount: 3, main: true },
+        { foodId: 'sugar', amount: 0.5, main: false },
       ]);
       expect(r.value.steps).toEqual(['卵を溶く', '焼く']);
     }
   });
 
   it('材料がない・量が読めない・同じ材料が2回はエラー', () => {
-    expect(validateRecipeDraft({ ...base, ingredients: [] }, 'r1').ok).toBe(false);
-    expect(validateRecipeDraft({ ...base, ingredients: [{ foodId: 'egg', amount: 'たくさん' }] }, 'r1').ok).toBe(false);
+    expect(validateRecipeDraft({ ...base, ingredients: [] }, 'r1', byId).ok).toBe(false);
+    expect(validateRecipeDraft({ ...base, ingredients: [{ foodId: 'egg', amount: 'たくさん', main: true }] }, 'r1', byId).ok).toBe(false);
     expect(
-      validateRecipeDraft({ ...base, ingredients: [{ foodId: 'egg', amount: '1' }, { foodId: 'egg', amount: '2' }] }, 'r1').ok,
+      validateRecipeDraft({ ...base, ingredients: [{ foodId: 'egg', amount: '1', main: true }, { foodId: 'egg', amount: '2', main: false }] }, 'r1', byId).ok,
     ).toBe(false);
+  });
+
+  it('主な材料がないとエラー', () => {
+    const r = validateRecipeDraft(
+      { ...base, ingredients: base.ingredients.map((i) => ({ ...i, main: false })) },
+      'r1',
+      byId,
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toContain('主な材料を1つ以上選んでください');
+  });
+
+  it('薬味と調味料は主な材料にできない', () => {
+    const withGinger = { ...base, ingredients: [...base.ingredients, { foodId: 'ginger', amount: '1', main: true }] };
+    expect(validateRecipeDraft(withGinger, 'r1', byId).ok).toBe(false);
+    const sugarMain = { ...base, ingredients: base.ingredients.map((i) => ({ ...i, main: true })) };
+    expect(validateRecipeDraft(sugarMain, 'r1', byId).ok).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 // データベースのテスト(fake-indexeddb でメモリ上の IndexedDB を使う)
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 import { INITIAL_FOODS } from '../data/foods';
 import { INITIAL_RECIPES } from '../data/recipes';
@@ -86,5 +87,92 @@ describe('書き出しと読み込み', () => {
     if (!parsed.ok) throw new Error(parsed.error);
     await dst.replaceAll(parsed.data);
     expect(await dst.readAll()).toEqual(await src.readAll());
+  });
+});
+
+describe('版1からの移行', () => {
+  it('既存データを消さずに、薬味・アレルギー物質・主な材料・買い足し上限を補う', async () => {
+    const name = `test-${++n}`;
+    // 版1のデータベースを、版1の形のデータで作る
+    const old = new Dexie(name);
+    old.version(1).stores({
+      foods: 'id, name, kind',
+      stocks: 'foodId',
+      pantry: 'foodId',
+      members: 'id, kind',
+      household: 'id',
+      recipes: 'id, course, source',
+      mealSets: 'id, startDate',
+      stockMoves: 'id, at, foodId',
+      feedbacks: 'id, at',
+    });
+    const strip = <T extends object>(o: T, keys: string[]) =>
+      Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+    // 版1のころにはなかった食材(なめこ)とレシピ(なめこの味噌汁)は入れない
+    await old.table('foods').bulkAdd(
+      INITIAL_FOODS.filter((f) => f.id !== 'nameko').map((f) => strip(f, ['isCondiment', 'allergens', 'allergenUncertain'])),
+    );
+    await old.table('foods').add({ id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5 });
+    const v1Recipe = (r: (typeof INITIAL_RECIPES)[number]) => ({
+      ...r,
+      ingredients: r.ingredients.map((i) => ({ foodId: i.foodId, amount: i.amount })),
+    });
+    await old.table('recipes').bulkAdd(INITIAL_RECIPES.filter((r) => r.id !== 'init_miso_nameko').map(v1Recipe));
+    await old.table('recipes').add({ ...v1Recipe(INITIAL_RECIPES[0]), id: 'my_1', source: 'マイレシピ' });
+    await old.table('members').add({ id: 'm1', name: 'テスト', kind: '家族', sex: '女性', age: 40, appetite: 'ふつう', portionOverride: null, likedFoodIds: [], dislikedFoodIds: [], allergyFoodIds: ['shrimp'], likedMethods: [], dislikedMethods: [], likedFlavors: [], dislikedFlavors: [] });
+    await old.table('household').add({ id: 'household', methodFrequency: { 揚げ物: '好き' }, dislikedFlavors: [] });
+    await old.table('stocks').add({ foodId: 'egg', amount: 6, addedDate: '2026-09-20' });
+    old.close();
+
+    // 新しい版で開く
+    const db = new KondateDB(name);
+    opened.push(db);
+    expect(await db.foods.get('soy_sauce')).toMatchObject({ isCondiment: false, allergens: ['小麦', '大豆'] });
+    expect(await db.foods.get('ginger')).toMatchObject({ isCondiment: true });
+    expect(await db.foods.get('salad_oil')).toMatchObject({ allergenUncertain: true });
+    expect(await db.foods.get('user_1')).toMatchObject({ isCondiment: false, allergens: [], allergenUncertain: false });
+    const nikujaga = await db.recipes.get('init_nikujaga');
+    expect(nikujaga?.ingredients.filter((i) => i.main).map((i) => i.foodId)).toEqual(['beef_koma', 'potato']);
+    expect((await db.recipes.get('my_1'))?.ingredients.every((i) => i.main === false)).toBe(true);
+    expect(await db.members.get('m1')).toMatchObject({ allergyFoodIds: ['shrimp'], allergyAllergens: [] });
+    expect(await db.household.get('household')).toMatchObject({ shoppingLimitPerMeal: 2, methodFrequency: { 揚げ物: '好き' } });
+    expect(await db.stocks.get('egg')).toEqual({ foodId: 'egg', amount: 6, addedDate: '2026-09-20' });
+    // 追加した初期食材・初期レシピが届く
+    expect(await db.foods.get('nameko')).toMatchObject({ name: 'なめこ' });
+    expect((await db.recipes.get('init_miso_nameko'))?.ingredients.find((i) => i.foodId === 'nameko')?.main).toBe(true);
+    expect(await db.recipes.count()).toBe(INITIAL_RECIPES.length + 1); // +1 はマイレシピ
+  });
+});
+
+describe('献立の確定・キャンセルの保存', () => {
+  it('確定で在庫が減り、買った→1食キャンセル→全体キャンセルで、確定前+買った分に戻る。動きはすべて記録される', async () => {
+    const { confirmPlanToDb, cancelDayInDb, cancelSetInDb, markBoughtInDb } = await import('./mealSetRepo');
+    const { plannerData, member, conditions, days } = await import('../logic/planner/testing');
+    const db = freshDb();
+    const ids = sequentialIds();
+    await addStockToDb(db, 'pork_loin', 250, day1, ids);
+    await addStockToDb(db, 'onion', 3, day1, ids);
+    const before = await db.stocks.orderBy('foodId').toArray();
+
+    const recipes = await db.recipes.toArray();
+    const data = plannerData({ recipes, members: [member('a'), member('b')], pantryIds: [] });
+    const planned = days(['a', 'b']).map((d) => ({ ...d, mainId: 'init_ginger_pork', sideId: 'init_spinach_goma', soupId: 'init_miso_tofu_wakame', overLimit: false }));
+    // 在庫は保存の直前にデータベースから読み直すので、data の在庫(空)は使われない
+    const set = await confirmPlanToDb(db, { id: 'set1', startDate: planned[0].date, days: planned, conditions: conditions('ふつう'), guests: [], data, now: day1, newId: ids });
+
+    // 250g を1日目200g・2日目50gで使い切り、2日目の残り150gと3日目の200gが買い足しになる
+    expect(await db.stocks.get('pork_loin')).toBeUndefined();
+    expect(set.shopping.filter((s) => s.foodId === 'pork_loin').map((s) => s.amount)).toEqual([150, 200]);
+
+    const bought = await markBoughtInDb(db, 'set1', 'pork_loin', 500, day2, ids);
+    expect(bought.ok).toBe(true);
+    expect((await cancelDayInDb(db, 'set1', 1, day2, ids)).ok).toBe(true);
+    expect((await cancelSetInDb(db, 'set1', day2, ids)).ok).toBe(true);
+
+    const after = await db.stocks.orderBy('foodId').toArray();
+    expect(after).toEqual(before.map((s) => (s.foodId === 'pork_loin' ? { ...s, amount: 750 } : s)));
+    expect((await db.mealSets.get('set1'))?.status).toBe('キャンセル');
+    const reasons = new Set((await db.stockMoves.toArray()).map((m) => m.reason));
+    expect(reasons).toEqual(new Set(['購入', '夕飯', 'キャンセルで戻す']));
   });
 });

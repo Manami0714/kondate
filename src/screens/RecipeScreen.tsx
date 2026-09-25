@@ -6,6 +6,7 @@ import { db } from '../db/db';
 import type { Course, Recipe } from '../db/types';
 import { useFoods } from '../hooks/useFoods';
 import { DIFFICULTY_LABELS } from '../logic/format';
+import { hasMainFlags } from '../logic/planner/mainFoods';
 import { RecipeDetail } from './RecipeDetail';
 import { RecipeForm } from './RecipeForm';
 
@@ -50,6 +51,7 @@ export function RecipeScreen() {
                     {r.minutes}分・{DIFFICULTY_LABELS[r.difficulty]}・{[...r.methods, ...r.flavors].join('・')}
                   </div>
                 </span>
+                {!hasMainFlags(r) && <span className="tag">主な材料が未設定</span>}
                 {r.source !== '初期' && <span className="tag">{r.source}</span>}
               </button>
             </li>

@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { MultiChoice, SingleChoice } from '../components/Choice';
 import { ErrorList, Field } from '../components/Field';
 import { FoodMultiSelect } from '../components/FoodMultiSelect';
+import { ALLERGENS } from '../data/allergens';
 import { COOKING_METHODS, FLAVORS, flavorLabel } from '../data/tags';
 import { db } from '../db/db';
 import type { Appetite, Food, Member, MemberKind, Sex } from '../db/types';
-import { validateMemberDraft, type MemberDraft } from '../logic/forms';
+import { parseAmount, validateMemberDraft, type MemberDraft } from '../logic/forms';
 import { randomId } from '../logic/id';
+import { autoPortion, formatPortion } from '../logic/portion';
 
 interface Props {
   member: Member | null;
@@ -27,6 +29,7 @@ function toDraft(m: Member | null): MemberDraft {
       likedFoodIds: [],
       dislikedFoodIds: [],
       allergyFoodIds: [],
+      allergyAllergens: [],
       likedMethods: [],
       dislikedMethods: [],
       likedFlavors: [],
@@ -62,7 +65,12 @@ export function MemberForm({ member, foods, byId, onDone }: Props) {
     onDone();
   };
 
-  const foodSelect = (key: 'likedFoodIds' | 'dislikedFoodIds' | 'allergyFoodIds', title: string) => (
+  // 今の入力から計算した自動の倍率(女性30〜49歳・ふつう=1.0倍)
+  const age = parseAmount(draft.age);
+  const autoText =
+    age !== null && Number.isInteger(age) ? formatPortion(autoPortion(draft.sex, age, draft.appetite)) : '年齢を入れると表示';
+
+  const foodSelect =(key: 'likedFoodIds' | 'dislikedFoodIds' | 'allergyFoodIds', title: string) => (
     <FoodMultiSelect title={title} foods={foods} byId={byId} value={draft[key]} onChange={(ids) => set(key, ids)} />
   );
 
@@ -92,7 +100,10 @@ export function MemberForm({ member, foods, byId, onDone }: Props) {
           onChange={(v) => set('appetite', v)}
         />
       </Field>
-      <Field label="1人分の倍率(手で決める場合)" hint="空欄なら年齢・性別・食べる量から自動で決めます(自動の計算は次のフェーズで作ります)">
+      <Field
+        label="1人分の倍率(手で決める場合)"
+        hint={`空欄なら年齢・性別・食べる量から自動で決めます(自動:${autoText})`}
+      >
         <input
           className="input"
           inputMode="decimal"
@@ -103,7 +114,12 @@ export function MemberForm({ member, foods, byId, onDone }: Props) {
       </Field>
 
       <h3 className="section-title">アレルギー</h3>
-      {foodSelect('allergyFoodIds', 'アレルギーの食材')}
+      <Field label="アレルギー物質" hint="食品表示のアレルギー表示対象29品目から選びます。調味料や加工品に含まれるものも判定します">
+        <MultiChoice options={ALLERGENS} value={draft.allergyAllergens} onChange={(v) => set('allergyAllergens', v)} />
+      </Field>
+      <Field label="食材で指定" hint="29品目にないものは、食材辞書から選びます">
+        {foodSelect('allergyFoodIds', 'アレルギーの食材')}
+      </Field>
 
       <h3 className="section-title">食材の好み</h3>
       <Field label="好きな食材">{foodSelect('likedFoodIds', '好きな食材')}</Field>

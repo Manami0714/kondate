@@ -5,7 +5,9 @@ import { defaultHouseholdPrefs } from '../../data/household';
 import { db } from '../../db/db';
 import type { Frequency, HouseholdPrefs } from '../../db/types';
 
-/** 家庭全体の好み:調理法ごとの頻度と、苦手な味付け */
+const SHOPPING_LIMIT_OPTIONS = [0, 1, 2, 3, 4, 5];
+
+/** 家庭全体の好み:調理法ごとの頻度、苦手な味付け、買い足し品数の上限 */
 export function HouseholdSection() {
   const prefs = useLiveQuery(async () => (await db.household.get('household')) ?? defaultHouseholdPrefs(), []);
   if (!prefs) return null;
@@ -38,6 +40,16 @@ export function HouseholdSection() {
           onChange={(v) => save({ ...prefs, dislikedFlavors: v })}
           label={flavorLabel}
         />
+      </div>
+      <div className="field" style={{ marginTop: 16 }}>
+        <span className="field-label">1食あたりの買い足し品数の上限</span>
+        <SingleChoice<number>
+          options={SHOPPING_LIMIT_OPTIONS}
+          value={prefs.shoppingLimitPerMeal}
+          onChange={(v) => save({ ...prefs, shoppingLimitPerMeal: v })}
+          label={(v) => `${v}品`}
+        />
+        <span className="field-hint">常備調味料にない調味料も1品として数えます。在庫が少なくて組めない日だけ上限を超えます</span>
       </div>
     </>
   );

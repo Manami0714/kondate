@@ -4,6 +4,7 @@ import { Sheet } from '../components/Sheet';
 import { db } from '../db/db';
 import type { Member, MemberKind } from '../db/types';
 import { useFoods } from '../hooks/useFoods';
+import { formatPortion, portionOf } from '../logic/portion';
 import { MemberForm } from './MemberForm';
 
 type Mode = { type: 'none' } | { type: 'edit'; member: Member | null };
@@ -31,8 +32,10 @@ export function MemberScreen() {
                     <span className="list-title">{m.name}</span>
                     <div className="list-sub">
                       {m.sex}・{m.age}歳・{m.appetite}
-                      {m.portionOverride !== null && `・倍率${m.portionOverride}`}
-                      {m.allergyFoodIds.length > 0 && `・アレルギー${m.allergyFoodIds.length}件`}
+                      ・{formatPortion(portionOf(m))}
+                      {m.portionOverride !== null && '(手入力)'}
+                      {m.allergyAllergens.length + m.allergyFoodIds.length > 0 &&
+                        `・アレルギー${m.allergyAllergens.length + m.allergyFoodIds.length}件`}
                     </div>
                   </span>
                 </button>

@@ -1,6 +1,6 @@
 // 在庫の増減(純粋関数)
 // 在庫を変えるときは、必ずこの関数で「新しい在庫」と「在庫の動き」を一緒に作る
-import type { Stock, StockMove, StockMoveReason } from '../db/types';
+import type { DateString, Stock, StockMove, StockMoveReason } from '../db/types';
 import { toDateString, toDateTimeString } from './date';
 import type { IdGenerator } from './id';
 
@@ -19,6 +19,8 @@ export interface ChangeStockInput {
   now: Date;
   newId: IdGenerator;
   mealSetId?: string | null;
+  /** 在庫が0から増えるときに使う追加日(キャンセルで戻すとき、元の追加日に戻すため)。なければ今日 */
+  restoreAddedDate?: DateString | null;
 }
 
 /** 小数の誤差(0.1+0.2 など)を消すため、小数3桁で丸める */
@@ -30,10 +32,12 @@ export function roundAmount(value: number): number {
  * 在庫を delta だけ増減する。
  * - 0 以下になったら在庫から消す(マイナスにはしない)
  * - 追加日は「在庫が0から増えた日」。残っているうちに増やしても変えない
+ * - restoreAddedDate(キャンセルで戻すとき)があれば、0から増えるときはその日にし、
+ *   残っている在庫の追加日より古ければ古い方にする(保存の目安を安全側で見るため)
  * - 在庫の動きには実際に変わった量を記録する(動きを逆に足せば必ず元に戻る)
  */
 export function changeStock(input: ChangeStockInput): StockChange {
-  const { current, foodId, delta, reason, now, newId, mealSetId = null } = input;
+  const { current, foodId, delta, reason, now, newId, mealSetId = null, restoreAddedDate = null } = input;
   if (!Number.isFinite(delta)) throw new Error('量が数字ではありません');
 
   const before = current?.amount ?? 0;
@@ -44,14 +48,9 @@ export function changeStock(input: ChangeStockInput): StockChange {
     return { stock: current, move: null };
   }
 
-  const stock: Stock | null =
-    after <= 0
-      ? null
-      : {
-          foodId,
-          amount: after,
-          addedDate: current && before > 0 ? current.addedDate : toDateString(now),
-        };
+  let addedDate = current && before > 0 ? current.addedDate : (restoreAddedDate ?? toDateString(now));
+  if (restoreAddedDate !== null && delta > 0 && restoreAddedDate < addedDate) addedDate = restoreAddedDate;
+  const stock: Stock | null = after <= 0 ? null : { foodId, amount: after, addedDate };
 
   const move: StockMove = {
     id: newId(),

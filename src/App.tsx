@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { MemberScreen } from './screens/MemberScreen';
+import { PlanScreen } from './screens/PlanScreen';
 import { RecipeScreen } from './screens/RecipeScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { StockScreen } from './screens/StockScreen';
 
-type Tab = 'stock' | 'recipes' | 'members' | 'settings';
+type Tab = 'plan' | 'stock' | 'recipes' | 'members' | 'settings';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'plan', label: '献立', icon: '🍚' },
   { id: 'stock', label: '在庫', icon: '🧊' },
   { id: 'recipes', label: 'レシピ', icon: '📖' },
   { id: 'members', label: 'メンバー', icon: '👪' },
@@ -14,11 +16,12 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export function App() {
-  const [tab, setTab] = useState<Tab>('stock');
+  const [tab, setTab] = useState<Tab>('plan');
 
   return (
     <div className="app">
       <main className="app-main">
+        {tab === 'plan' && <PlanScreen />}
         {tab === 'stock' && <StockScreen />}
         {tab === 'recipes' && <RecipeScreen />}
         {tab === 'members' && <MemberScreen />}

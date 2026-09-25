@@ -1,16 +1,19 @@
-import type { Food, Recipe } from '../db/types';
+import type { Food, Recipe, RecipeIngredient } from '../db/types';
 import { flavorLabel } from '../data/tags';
-import { DIFFICULTY_LABELS, formatAmount } from '../logic/format';
+import { DIFFICULTY_LABELS, formatAmount, formatApproxAmount } from '../logic/format';
 
 interface Props {
   recipe: Recipe;
-  byId: Map<string, Food>;
+  byId: ReadonlyMap<string, Food>;
+  /** 人数に合わせた量で見せるとき:その量と、見出しに出す説明(例:「合計2.3倍分」) */
+  scaled?: { ingredients: RecipeIngredient[]; label: string };
 }
 
 /** レシピの中身を見る */
-export function RecipeDetail({ recipe, byId }: Props) {
-  const main = recipe.ingredients.filter((i) => byId.get(i.foodId)?.kind !== '調味料');
-  const seasonings = recipe.ingredients.filter((i) => byId.get(i.foodId)?.kind === '調味料');
+export function RecipeDetail({ recipe, byId, scaled }: Props) {
+  const ingredients = scaled?.ingredients ?? recipe.ingredients;
+  const main = ingredients.filter((i) => byId.get(i.foodId)?.kind !== '調味料');
+  const seasonings = ingredients.filter((i) => byId.get(i.foodId)?.kind === '調味料');
 
   const ingredientList = (items: Recipe['ingredients']) => (
     <ul className="list">
@@ -19,8 +22,11 @@ export function RecipeDetail({ recipe, byId }: Props) {
         return (
           <li key={i.foodId} className="list-item">
             <span className="group-dot" data-group={food?.foodGroup ?? ''} aria-hidden="true" />
-            <span className="list-main">{food?.name ?? '(辞書にない食材)'}</span>
-            <span className="list-end">{food ? formatAmount(i.amount, food.unit) : i.amount}</span>
+            <span className="list-main">
+              {food?.name ?? '(辞書にない食材)'}
+              {i.main && <span className="tag" style={{ marginLeft: 6 }}>主</span>}
+            </span>
+            <span className="list-end">{food ? (scaled ? formatApproxAmount : formatAmount)(i.amount, food.unit) : i.amount}</span>
           </li>
         );
       })}
@@ -50,7 +56,7 @@ export function RecipeDetail({ recipe, byId }: Props) {
         </div>
       </div>
 
-      <h3 className="section-title">材料({recipe.servings}人分)</h3>
+      <h3 className="section-title">材料({scaled ? scaled.label : `${recipe.servings}人分`})</h3>
       {main.length > 0 && ingredientList(main)}
       {seasonings.length > 0 && (
         <>

@@ -3,6 +3,15 @@ import Dexie, { type EntityTable } from 'dexie';
 import { INITIAL_FOODS } from '../data/foods';
 import { defaultHouseholdPrefs } from '../data/household';
 import { INITIAL_RECIPES } from '../data/recipes';
+import {
+  missingSeeds,
+  upgradeFoodV1,
+  upgradeHouseholdV1,
+  upgradeMealSetV1,
+  upgradeMemberV1,
+  upgradeRecipeV1,
+} from '../logic/migrate';
+import type { Obj } from '../logic/validate';
 import type {
   AllData,
   Feedback,
@@ -40,6 +49,24 @@ export class KondateDB extends Dexie {
       mealSets: 'id, startDate',
       stockMoves: 'id, at, foodId',
       feedbacks: 'id, at',
+    });
+
+    // 版2:薬味の印・アレルギー物質・主な材料・買い足し上限・献立セットの新しい項目を足す
+    // 表の形(主キーと検索項目)は変えず、既存データに足りない値を補う
+    this.version(2).upgrade(async (tx) => {
+      const modify = (table: string, fn: (o: Obj) => void) =>
+        tx.table(table).toCollection().modify((o: Obj) => fn(o));
+      await modify('foods', upgradeFoodV1);
+      await modify('members', upgradeMemberV1);
+      await modify('recipes', upgradeRecipeV1);
+      await modify('household', upgradeHouseholdV1);
+      await modify('mealSets', upgradeMealSetV1);
+      // 初期レシピの追加1・2回目(と、それに使う新しい食材)を既存の端末に足す。次に追加するときは版を上げて同じことをする
+      const foodIds = new Set((await tx.table('foods').toCollection().primaryKeys()).map(String));
+      const recipeIds = new Set((await tx.table('recipes').toCollection().primaryKeys()).map(String));
+      const missing = missingSeeds(foodIds, recipeIds);
+      await tx.table('foods').bulkAdd(missing.foods);
+      await tx.table('recipes').bulkAdd(missing.recipes);
     });
 
     // データベースを初めて作ったときだけ、初期データを入れる

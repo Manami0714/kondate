@@ -110,3 +110,32 @@ describe('在庫の減少と手直し', () => {
     expect(back.stock?.amount).toBe(3);
   });
 });
+
+describe('キャンセルで戻すときの追加日', () => {
+  const now = new Date(2026, 8, 25, 12, 0, 0);
+  it('0から戻すときは元の追加日にし、残っている在庫より古ければ古い方にする', () => {
+    const ids = sequentialIds();
+    const fromZero = changeStock({ current: null, foodId: 'egg', delta: 2, reason: 'キャンセルで戻す', now, newId: ids, restoreAddedDate: '2026-09-20' });
+    expect(fromZero.stock?.addedDate).toBe('2026-09-20');
+    const older = changeStock({
+      current: { foodId: 'egg', amount: 5, addedDate: '2026-09-24' },
+      foodId: 'egg',
+      delta: 2,
+      reason: 'キャンセルで戻す',
+      now,
+      newId: ids,
+      restoreAddedDate: '2026-09-20',
+    });
+    expect(older.stock?.addedDate).toBe('2026-09-20');
+    const newer = changeStock({
+      current: { foodId: 'egg', amount: 5, addedDate: '2026-09-18' },
+      foodId: 'egg',
+      delta: 2,
+      reason: 'キャンセルで戻す',
+      now,
+      newId: ids,
+      restoreAddedDate: '2026-09-20',
+    });
+    expect(newer.stock?.addedDate).toBe('2026-09-18');
+  });
+});

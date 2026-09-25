@@ -1,5 +1,6 @@
 import { useFoods } from '../hooks/useFoods';
 import { BackupSection } from './settings/BackupSection';
+import { FoodDictionarySection } from './settings/FoodDictionarySection';
 import { HouseholdSection } from './settings/HouseholdSection';
 import { PantrySection } from './settings/PantrySection';
 
@@ -13,6 +14,7 @@ export function SettingsScreen() {
         <h1 className="screen-title">設定</h1>
       </div>
       <PantrySection foods={foodData.foods} />
+      <FoodDictionarySection foods={foodData.foods} />
       <HouseholdSection />
       <BackupSection />
     </>
