@@ -9,6 +9,7 @@ import {
   type Food,
   type Frequency,
   type HouseholdPrefs,
+  type IgnoredWord,
   type MealSet,
   type MealStatus,
   type Member,
@@ -19,7 +20,8 @@ import {
   type StockMove,
 } from '../db/types';
 import { toDateTimeString } from './date';
-import { upgradeBackupDataV1 } from './migrate';
+import { parseComboValue } from './feedback/target';
+import { upgradeBackupDataV1, upgradeBackupDataV2 } from './migrate';
 import {
   ValidationError,
   arr,
@@ -86,6 +88,8 @@ export function parseBackup(text: string): ParseResult {
     const d = obj(root.data, 'data');
     // 版1のファイルは、足りない項目を補ってから確かめる
     if (version < 2) upgradeBackupDataV1(d);
+    // 版2までのファイルには読まない言葉がない
+    if (version < 3) upgradeBackupDataV2(d);
     const data: AllData = {
       foods: arr(d, 'foods', 'data').map((v, i) => parseFood(v, `食材辞書[${i}]`)),
       stocks: arr(d, 'stocks', 'data').map((v, i) => parseStock(v, `在庫[${i}]`)),
@@ -96,6 +100,7 @@ export function parseBackup(text: string): ParseResult {
       mealSets: arr(d, 'mealSets', 'data').map((v, i) => parseMealSet(v, `献立セット[${i}]`)),
       stockMoves: arr(d, 'stockMoves', 'data').map((v, i) => parseStockMove(v, `在庫の動き[${i}]`)),
       feedbacks: arr(d, 'feedbacks', 'data').map((v, i) => parseFeedback(v, `評価[${i}]`)),
+      ignoredWords: arr(d, 'ignoredWords', 'data').map((v, i) => parseIgnoredWord(v, `読まない言葉[${i}]`)),
     };
     return { ok: true, data, exportedAt };
   } catch (e) {
@@ -277,12 +282,23 @@ function parseStockMove(v: unknown, p: string): StockMove {
 
 function parseFeedback(v: unknown, p: string): Feedback {
   const o = obj(v, p);
+  const targetType = oneOf(o, 'targetType', ['食材', '料理法', '味付け', '料理法×味付け', 'レシピ'] as const, p);
+  const targetValue = str(o, 'targetValue', p);
+  const vp = `${p}.targetValue`;
+  if (targetType === '料理法' && !(COOKING_METHODS as readonly string[]).includes(targetValue)) fail(vp, '調理法');
+  if (targetType === '味付け' && !(FLAVORS as readonly string[]).includes(targetValue)) fail(vp, '味付け');
+  if (targetType === '料理法×味付け' && parseComboValue(targetValue) === null) fail(vp, '「調理法×味付け」の形');
   return {
     id: str(o, 'id', p),
     at: str(o, 'at', p),
-    targetType: oneOf(o, 'targetType', ['食材', '料理法', '味付け', 'レシピ'] as const, p),
-    targetValue: str(o, 'targetValue', p),
+    targetType,
+    targetValue,
     kind: oneOf(o, 'kind', ['提案時の嫌い', '食後の嫌い', '好き'] as const, p),
     originalText: str(o, 'originalText', p),
   };
+}
+
+function parseIgnoredWord(v: unknown, p: string): IgnoredWord {
+  const o = obj(v, p);
+  return { word: str(o, 'word', p), label: str(o, 'label', p), addedAt: str(o, 'addedAt', p) };
 }

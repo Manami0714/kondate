@@ -1,6 +1,11 @@
+import { useLiveQuery } from 'dexie-react-hooks';
+import { useState } from 'react';
+import { db } from '../db/db';
+import { setFavoriteInDb } from '../db/recipeRepo';
 import type { Food, Recipe, RecipeIngredient } from '../db/types';
 import { flavorLabel } from '../data/tags';
 import { DIFFICULTY_LABELS, formatAmount, formatApproxAmount } from '../logic/format';
+import { FeedbackSheet } from './feedback/FeedbackSheet';
 
 interface Props {
   recipe: Recipe;
@@ -35,6 +40,7 @@ export function RecipeDetail({ recipe, byId, scaled }: Props) {
 
   return (
     <div className="form">
+      <RecipeActions recipe={recipe} />
       <div className="card">
         <div>
           {recipe.course}・{recipe.minutes}分・{DIFFICULTY_LABELS[recipe.difficulty]}・{scaled ? `元のレシピは${recipe.servings}人分` : `${recipe.servings}人分`}
@@ -81,6 +87,28 @@ export function RecipeDetail({ recipe, byId, scaled }: Props) {
       ) : (
         !recipe.url && <p className="muted">手順は登録されていません</p>
       )}
+    </div>
+  );
+}
+
+/** お気に入りと感想のボタン。お気に入りはデータベースの今の値を見る(押したらすぐ表示が変わるように) */
+function RecipeActions({ recipe }: { recipe: Recipe }) {
+  const favorite = useLiveQuery(async () => (await db.recipes.get(recipe.id))?.favorite ?? recipe.favorite, [recipe.id]) ?? recipe.favorite;
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  return (
+    <div className="btn-row">
+      <button
+        type="button"
+        className={`btn${favorite ? ' btn-favorite' : ''}`}
+        aria-pressed={favorite}
+        onClick={() => void setFavoriteInDb(db, recipe.id, !favorite)}
+      >
+        {favorite ? '★ お気に入り' : '☆ お気に入りにする'}
+      </button>
+      <button type="button" className="btn" onClick={() => setFeedbackOpen(true)}>
+        この料理の感想
+      </button>
+      {feedbackOpen && <FeedbackSheet initialText={`${recipe.name}は`}onClose={() => setFeedbackOpen(false)} />}
     </div>
   );
 }

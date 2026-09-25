@@ -4,6 +4,7 @@ import { db } from '../db/db';
 import { loadDraft } from '../db/draftRepo';
 import { usePlannerData } from '../hooks/usePlannerData';
 import { formatShortDate, toDateString } from '../logic/date';
+import { FeedbackSheet } from './feedback/FeedbackSheet';
 import { MealSetView } from './plan/MealSetView';
 import { PlanWizard } from './plan/PlanWizard';
 
@@ -14,6 +15,7 @@ export function PlanScreen() {
   /** 確定前の提案(下書き)。読み込み中は undefined、なければ null */
   const draft = useLiveQuery(() => loadDraft(db), []);
   const [creating, setCreating] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   // 下書きがあれば、タブを開いたときに1回だけ自動で提案の画面を出す
   const autoOpened = useRef(false);
   useEffect(() => {
@@ -44,12 +46,18 @@ export function PlanScreen() {
     <>
       <div className="screen-header">
         <h1 className="screen-title">献立</h1>
-        {!draft && (
-          <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-            ＋ 献立を作る
+        <div className="header-actions">
+          <button type="button" className="btn" onClick={() => setFeedbackOpen(true)}>
+            感想を入力
           </button>
-        )}
+          {!draft && (
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              ＋ 献立を作る
+            </button>
+          )}
+        </div>
       </div>
+      {feedbackOpen && <FeedbackSheet onClose={() => setFeedbackOpen(false)} />}
       {draft && (
         <div className="card" style={{ marginBottom: 16 }}>
           <p style={{ marginTop: 0 }}>{formatShortDate(draft.startDate)}からの、作りかけの献立の提案があります。</p>

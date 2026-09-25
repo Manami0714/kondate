@@ -13,6 +13,7 @@ const TABLE_LABELS: Record<keyof AllData, string> = {
   mealSets: '献立セット',
   stockMoves: '在庫の動き',
   feedbacks: '評価',
+  ignoredWords: '読まない言葉',
 };
 
 /** タッチ操作の端末(iPhone など)では共有シートで保存する */

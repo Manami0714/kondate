@@ -121,6 +121,12 @@ textarea {
   margin: 8px 0 12px;
 }
 
+/* 見出しの右に並べるボタン */
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .screen-title {
   font-size: 24px;
   margin: 0;
@@ -155,6 +161,12 @@ textarea {
 
 .btn-danger {
   color: var(--danger);
+}
+
+.btn-favorite {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .btn-small {
@@ -411,6 +423,10 @@ button.list-item {
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--text-sub);
+}
+
+.favorite-mark {
+  color: var(--accent);
 }
 
 .steps {

@@ -195,7 +195,7 @@ export interface StockMove {
   mealSetId: string | null;
 }
 
-export type FeedbackTargetType = '食材' | '料理法' | '味付け' | 'レシピ';
+export type FeedbackTargetType = '食材' | '料理法' | '味付け' | '料理法×味付け' | 'レシピ';
 export type FeedbackKind = '提案時の嫌い' | '食後の嫌い' | '好き';
 
 /** 評価 */
@@ -203,11 +203,20 @@ export interface Feedback {
   id: string;
   at: DateTimeString;
   targetType: FeedbackTargetType;
-  /** 食材ID・調理法・味付け・レシピIDのどれか */
+  /** 食材ID・調理法・味付け・「和え物×胡麻」の形の組み合わせ・レシピIDのどれか(組み合わせは logic/feedback/target.ts で作る) */
   targetValue: string;
   kind: FeedbackKind;
   /** 元の発言 */
   originalText: string;
+}
+
+/** 読まない言葉。レシート・ネットスーパーの確認画面で「食材ではない」を選んだ品 */
+export interface IgnoredWord {
+  /** 比べやすい形にそろえた言葉(normalizeForSearch 済み)。主キー */
+  word: string;
+  /** 画面に出す元の書き方 */
+  label: string;
+  addedAt: DateTimeString;
 }
 
 /** 全データ(書き出し・読み込みの単位) */
@@ -221,6 +230,7 @@ export interface AllData {
   mealSets: MealSet[];
   stockMoves: StockMove[];
   feedbacks: Feedback[];
+  ignoredWords: IgnoredWord[];
 }
 
 export const TABLE_NAMES = [
@@ -233,6 +243,7 @@ export const TABLE_NAMES = [
   'mealSets',
   'stockMoves',
   'feedbacks',
+  'ignoredWords',
 ] as const satisfies readonly (keyof AllData)[];
 
 // ───────── 下書き ─────────

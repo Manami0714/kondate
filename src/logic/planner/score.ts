@@ -101,6 +101,9 @@ export function scoreRecipe(
   points += preferencePoints(recipe, ctx, data.household.dislikedFlavors);
   if (recipe.favorite) points += SCORE.favorite;
 
+  const feedbackLikes = data.feedbacks.filter((f) => f.kind === '好き' && feedbackMatches(f, recipe)).length;
+  points += Math.min(feedbackLikes * SCORE.feedbackLiked, SCORE.feedbackLikedMax);
+
   const suggestDislikes = data.feedbacks.filter((f) => f.kind === '提案時の嫌い' && feedbackMatches(f, recipe)).length;
   points += Math.max(suggestDislikes * SCORE.suggestDislike, SCORE.suggestDislikeMin);
 

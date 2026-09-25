@@ -1,6 +1,7 @@
 // 必ず外す条件(純粋関数)
 // アレルギー・食後の嫌い・時間と難易度。主な材料のかぶりと買い足し上限は、組み合わせるときに見る
 import type { Feedback, Food, Member, PlanConditions, Recipe } from '../../db/types';
+import { parseComboValue } from '../feedback/target';
 
 /** レシピがその日のメンバーの誰かのアレルギーに当てはまるか(食材そのもの+含まれるアレルギー物質) */
 export function hitsAllergy(recipe: Recipe, members: readonly Member[], foodsById: ReadonlyMap<string, Food>): boolean {
@@ -14,7 +15,10 @@ export function hitsAllergy(recipe: Recipe, members: readonly Member[], foodsByI
   });
 }
 
-/** 評価がそのレシピに当てはまるか(レシピ・食材・料理法・味付けのどれか) */
+/**
+ * 評価がそのレシピに当てはまるか(レシピ・食材・料理法・味付け・料理法×味付けのどれか)
+ * 料理法×味付けは、両方のタグを持つレシピだけに当てはまる(和え物×胡麻なら、ほかの和え物・ほかの胡麻味には当てはまらない)
+ */
 export function feedbackMatches(f: Feedback, recipe: Recipe): boolean {
   switch (f.targetType) {
     case 'レシピ':
@@ -25,6 +29,10 @@ export function feedbackMatches(f: Feedback, recipe: Recipe): boolean {
       return (recipe.methods as readonly string[]).includes(f.targetValue);
     case '味付け':
       return (recipe.flavors as readonly string[]).includes(f.targetValue);
+    case '料理法×味付け': {
+      const combo = parseComboValue(f.targetValue);
+      return combo !== null && recipe.methods.includes(combo.method) && recipe.flavors.includes(combo.flavor);
+    }
   }
 }
 

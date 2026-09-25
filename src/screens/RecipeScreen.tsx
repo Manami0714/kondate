@@ -51,6 +51,11 @@ export function RecipeScreen() {
                     {r.minutes}分・{DIFFICULTY_LABELS[r.difficulty]}・{[...r.methods, ...r.flavors].join('・')}
                   </div>
                 </span>
+                {r.favorite && (
+                  <span className="favorite-mark" aria-label="お気に入り">
+                    ★
+                  </span>
+                )}
                 {!hasMainFlags(r) && <span className="tag">主な材料が未設定</span>}
                 {r.source !== '初期' && <span className="tag">{r.source}</span>}
               </button>
@@ -65,7 +70,15 @@ export function RecipeScreen() {
           onClose={close}
           action={
             mode.recipe.source === 'マイレシピ' && (
-              <button type="button" className="btn btn-small" onClick={() => setMode({ type: 'edit', recipe: mode.recipe })}>
+              <button
+                type="button"
+                className="btn btn-small"
+                onClick={async () => {
+                  // お気に入りを切り替えた後でも古い値で上書きしないよう、今の値を読み直す
+                  const current = (await db.recipes.get(mode.recipe.id)) ?? mode.recipe;
+                  setMode({ type: 'edit', recipe: current });
+                }}
+              >
                 編集
               </button>
             )

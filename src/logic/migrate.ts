@@ -74,6 +74,11 @@ export function upgradeBackupDataV1(data: Obj): void {
   if (Array.isArray(data.recipes)) data.recipes.push(...missing.recipes);
 }
 
+/** 版2の書き出しファイルの data を、版3の形に直す(読まない言葉の表を足す) */
+export function upgradeBackupDataV2(data: Obj): void {
+  if (data.ignoredWords === undefined) data.ignoredWords = [];
+}
+
 /**
  * 初期データのうち、まだ入っていない食材とレシピ(初期レシピを追加したときに、既存の端末へ届けるため)。
  * 追加した回ごとにデータベースの版を上げ、その upgrade でこれを入れる

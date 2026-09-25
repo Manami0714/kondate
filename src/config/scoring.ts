@@ -45,6 +45,9 @@ export const SCORE = {
   forMemberFactor: 2,
   /** お気に入り */
   favorite: 10,
+  /** 評価の「好き」1件ごとと、その上限 */
+  feedbackLiked: 5,
+  feedbackLikedMax: 20,
   /** 提案時の嫌い1件ごとと、その下限 */
   suggestDislike: -10,
   suggestDislikeMin: -40,

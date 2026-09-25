@@ -210,3 +210,72 @@ describe('確定前の提案(下書き)', () => {
     expect(await db.mealSets.count()).toBe(1);
   });
 });
+
+describe('フェーズ3:昼食・評価・お気に入り・読まない言葉の保存', () => {
+  it('昼食で減らすと「昼食」の動きが残り、動きを逆に足すと元の在庫に戻る。直した別名も保存される', async () => {
+    const { useForLunchInDb } = await import('./stockRepo');
+    const { withAlias } = await import('../logic/aliases');
+    const db = freshDb();
+    const ids = sequentialIds();
+    await addStockToDb(db, 'egg', 10, day1, ids);
+    await addStockToDb(db, 'cabbage', 1, day1, ids);
+    const before = await db.stocks.orderBy('foodId').toArray();
+
+    const egg = (await db.foods.get('egg'))!;
+    const updated = withAlias(egg, 'エッグ', await db.foods.toArray())!;
+    // キャベツは在庫より多く言っても0で止まる(マイナスにしない)
+    await useForLunchInDb(db, [{ foodId: 'egg', amount: 2 }, { foodId: 'cabbage', amount: 3 }], [updated], day2, ids);
+    expect(await db.stocks.get('egg')).toMatchObject({ amount: 8 });
+    expect(await db.stocks.get('cabbage')).toBeUndefined();
+    expect((await db.foods.get('egg'))?.aliases).toContain('エッグ');
+
+    const lunchMoves = (await db.stockMoves.toArray()).filter((m) => m.reason === '昼食');
+    expect(lunchMoves.map((m) => [m.foodId, m.delta])).toEqual([
+      ['egg', -2],
+      ['cabbage', -1],
+    ]);
+    for (const m of lunchMoves) await addStockToDb(db, m.foodId, -m.delta, day1, ids);
+    expect(await db.stocks.orderBy('foodId').toArray()).toEqual(before);
+  });
+
+  it('評価をまとめて保存・削除でき、お気に入りを切り替えられる', async () => {
+    const { saveFeedbacksInDb, deleteFeedbackInDb } = await import('./feedbackRepo');
+    const { setFavoriteInDb } = await import('./recipeRepo');
+    const db = freshDb();
+    await saveFeedbacksInDb(
+      db,
+      [
+        { targetType: '食材', targetValue: 'spinach', kind: '好き' },
+        { targetType: '料理法×味付け', targetValue: '和え物×胡麻', kind: '提案時の嫌い' },
+      ],
+      ' ほうれん草は好き、胡麻和えは微妙 ',
+      day1,
+      sequentialIds('f'),
+    );
+    const saved = await db.feedbacks.orderBy('id').toArray();
+    expect(saved.map((f) => [f.id, f.targetValue, f.kind, f.originalText])).toEqual([
+      ['f-1', 'spinach', '好き', 'ほうれん草は好き、胡麻和えは微妙'],
+      ['f-2', '和え物×胡麻', '提案時の嫌い', 'ほうれん草は好き、胡麻和えは微妙'],
+    ]);
+    await deleteFeedbackInDb(db, 'f-1');
+    expect(await db.feedbacks.count()).toBe(1);
+
+    await setFavoriteInDb(db, 'init_nikujaga', true);
+    expect((await db.recipes.get('init_nikujaga'))?.favorite).toBe(true);
+    await setFavoriteInDb(db, 'init_nikujaga', false);
+    expect((await db.recipes.get('init_nikujaga'))?.favorite).toBe(false);
+  });
+
+  it('評価と読まない言葉も書き出し・読み込みで元に戻る', async () => {
+    const db = freshDb();
+    await db.feedbacks.add({ id: 'f1', at: day1.toISOString(), targetType: '料理法×味付け', targetValue: '和え物×胡麻', kind: '食後の嫌い', originalText: '胡麻和え' });
+    await db.ignoredWords.add({ word: 'トイレットペーパー', label: 'トイレットペーパー', addedAt: day1.toISOString() });
+    const before = await db.readAll();
+    const parsed = parseBackup(serializeBackup(before, day1));
+    if (!parsed.ok) throw new Error(parsed.error);
+    await db.feedbacks.clear();
+    await db.ignoredWords.clear();
+    await db.replaceAll(parsed.data);
+    expect(await db.readAll()).toEqual(before);
+  });
+});

@@ -17,6 +17,7 @@ import type {
   Feedback,
   Food,
   HouseholdPrefs,
+  IgnoredWord,
   MealSet,
   Member,
   PlanDraft,
@@ -36,6 +37,7 @@ export class KondateDB extends Dexie {
   mealSets!: EntityTable<MealSet, 'id'>;
   stockMoves!: EntityTable<StockMove, 'id'>;
   feedbacks!: EntityTable<Feedback, 'id'>;
+  ignoredWords!: EntityTable<IgnoredWord, 'word'>;
   /** 確定前の献立の提案(下書き)。書き出し・読み込みの対象外 */
   planDrafts!: EntityTable<PlanDraft, 'id'>;
 
@@ -75,6 +77,9 @@ export class KondateDB extends Dexie {
     // 版3:確定前の献立の提案(下書き)を保存する表を足す
     this.version(3).stores({ planDrafts: 'id' });
 
+    // 版4:読まない言葉(レシートで「食材ではない」を選んだ品)の表を足す
+    this.version(4).stores({ ignoredWords: 'word' });
+
     // データベースを初めて作ったときだけ、初期データを入れる
     this.on('populate', (tx) => {
       tx.table('foods').bulkAdd(INITIAL_FOODS);
@@ -95,6 +100,7 @@ export class KondateDB extends Dexie {
       mealSets: await this.mealSets.toArray(),
       stockMoves: await this.stockMoves.toArray(),
       feedbacks: await this.feedbacks.toArray(),
+      ignoredWords: await this.ignoredWords.toArray(),
     }));
   }
 
@@ -111,6 +117,7 @@ export class KondateDB extends Dexie {
       await this.mealSets.bulkAdd(data.mealSets);
       await this.stockMoves.bulkAdd(data.stockMoves);
       await this.feedbacks.bulkAdd(data.feedbacks);
+      await this.ignoredWords.bulkAdd(data.ignoredWords);
     });
   }
 }

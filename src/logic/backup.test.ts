@@ -70,8 +70,10 @@ function sampleData(): AllData {
       { id: 'mv1', at: now.toISOString(), foodId: 'egg', delta: 6, reason: '購入', mealSetId: null },
     ],
     feedbacks: [
-      { id: 'f1', at: now.toISOString(), targetType: '味付け', targetValue: '胡麻', kind: '提案時の嫌い', originalText: '胡麻和えが微妙' },
+      { id: 'f1', at: now.toISOString(), targetType: '味付け', targetValue: '胡麻', kind: '提案時の嫌い', originalText: '胡麻味が微妙' },
+      { id: 'f2', at: now.toISOString(), targetType: '料理法×味付け', targetValue: '和え物×胡麻', kind: '食後の嫌い', originalText: '胡麻和えが微妙' },
     ],
+    ignoredWords: [{ word: 'トイレットペーパー', label: 'トイレットペーパー', addedAt: now.toISOString() }],
   };
 }
 
@@ -103,6 +105,8 @@ describe('版1のファイルの読み込み', () => {
     const raw = JSON.parse(serializeBackup(data, now));
     raw.formatVersion = 1;
     const d = raw.data;
+    d.feedbacks = [];
+    delete d.ignoredWords;
     for (const f of d.foods) {
       delete f.isCondiment;
       delete f.allergens;
@@ -155,6 +159,18 @@ describe('版1のファイルの読み込み', () => {
   });
 });
 
+describe('版2のファイルの読み込み', () => {
+  it('読まない言葉がなくても、空として読み込める', () => {
+    const raw = JSON.parse(serializeBackup(sampleData(), now));
+    raw.formatVersion = 2;
+    delete raw.data.ignoredWords;
+    const r = parseBackup(JSON.stringify(raw));
+    if (!r.ok) throw new Error(r.error);
+    expect(r.data.ignoredWords).toEqual([]);
+    expect(r.data.feedbacks).toEqual(sampleData().feedbacks);
+  });
+});
+
 describe('壊れたファイルを拒否する', () => {
   it('JSON でないファイル', () => {
     const r = parseBackup('これはJSONではない');
@@ -167,7 +183,7 @@ describe('壊れたファイルを拒否する', () => {
   });
 
   it('新しい版の形式', () => {
-    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 2', '"formatVersion": 999');
+    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 3', '"formatVersion": 999');
     const r = parseBackup(text);
     expect(r.ok).toBe(false);
   });
@@ -185,6 +201,14 @@ describe('壊れたファイルを拒否する', () => {
     raw.data.recipes[0].methods = ['空揚げ'];
     const r = parseBackup(JSON.stringify(raw));
     expect(r.ok).toBe(false);
+  });
+
+  it('組み合わせの評価の値が正しくない', () => {
+    const raw = JSON.parse(serializeBackup(sampleData(), now));
+    raw.data.feedbacks[1].targetValue = '和え物×のり';
+    const r = parseBackup(JSON.stringify(raw));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain('評価[1].targetValue');
   });
 
   it('表が欠けている', () => {

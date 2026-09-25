@@ -191,7 +191,7 @@ export interface RecipeDraft {
   methods: CookingMethod[];
   flavors: Flavor[];
   stepsText: string;
-  /** お気に入り(フェーズ3で画面から変えられるようにする。ここでは値を引き継ぐだけ) */
+  /** お気に入り(料理の詳細のボタンで変える。ここでは値を引き継ぐだけ) */
   favorite: boolean;
 }
 

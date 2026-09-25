@@ -10,8 +10,9 @@ import { useFoods } from '../hooks/useFoods';
 import { formatShortDate } from '../logic/date';
 import { parseAmount } from '../logic/forms';
 import { amountToInput, formatAmount } from '../logic/format';
+import { LunchSheet } from './stock/LunchSheet';
 
-type Mode = { type: 'none' } | { type: 'pick' } | { type: 'add'; food: Food } | { type: 'edit'; food: Food; stock: Stock };
+type Mode = { type: 'none' } | { type: 'lunch' } | { type: 'pick' } | { type: 'add'; food: Food } | { type: 'edit'; food: Food; stock: Stock };
 
 export function StockScreen() {
   const foodData = useFoods();
@@ -33,9 +34,14 @@ export function StockScreen() {
     <>
       <div className="screen-header">
         <h1 className="screen-title">在庫</h1>
-        <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'pick' })}>
-          ＋ 追加
-        </button>
+        <div className="header-actions">
+          <button type="button" className="btn" onClick={() => setMode({ type: 'lunch' })}>
+            昼に使った
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'pick' })}>
+            ＋ 追加
+          </button>
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -56,6 +62,8 @@ export function StockScreen() {
           ))}
         </ul>
       )}
+
+      {mode.type === 'lunch' && <LunchSheet foods={foods} byId={byId} stocks={stocks} onClose={close} />}
 
       {mode.type === 'pick' && (
         <Sheet title="食材を選ぶ" onClose={close}>
