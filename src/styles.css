@@ -425,6 +425,15 @@ button.list-item {
   color: var(--text-sub);
 }
 
+/* レシピ一覧の絞り込み(主菜・副菜・汁物+お気に入りだけ) */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
 .favorite-mark {
   color: var(--accent);
 }

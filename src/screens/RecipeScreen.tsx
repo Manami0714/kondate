@@ -15,13 +15,15 @@ type Mode = { type: 'none' } | { type: 'view'; recipe: Recipe } | { type: 'edit'
 export function RecipeScreen() {
   const foodData = useFoods();
   const [course, setCourse] = useState<Course>('主菜');
+  /** お気に入りだけを出す(主菜・副菜・汁物の切り替えと組み合わせて使う) */
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const recipes = useLiveQuery(() => db.recipes.where('course').equals(course).toArray(), [course]);
   const [mode, setMode] = useState<Mode>({ type: 'none' });
 
   if (!foodData || !recipes) return <p className="muted">読み込み中…</p>;
 
   // マイレシピを先に、あとは名前順
-  const sorted = [...recipes].sort(
+  const sorted = recipes.filter((r) => !favoritesOnly || r.favorite).sort(
     (a, b) =>
       Number(b.source === 'マイレシピ') - Number(a.source === 'マイレシピ') || a.name.localeCompare(b.name, 'ja'),
   );
@@ -35,11 +37,25 @@ export function RecipeScreen() {
           ＋ マイレシピ
         </button>
       </div>
-      <SingleChoice<Course> options={['主菜', '副菜', '汁物']} value={course} onChange={setCourse} />
+      <div className="filter-row">
+        <SingleChoice<Course> options={['主菜', '副菜', '汁物']} value={course} onChange={setCourse} />
+        <button
+          type="button"
+          aria-pressed={favoritesOnly}
+          className={favoritesOnly ? 'chip is-on' : 'chip'}
+          onClick={() => setFavoritesOnly((v) => !v)}
+        >
+          ★ お気に入りだけ
+        </button>
+      </div>
       <div style={{ height: 12 }} />
 
       {sorted.length === 0 ? (
-        <div className="empty">{course}のレシピはまだありません</div>
+        <div className="empty">
+          {favoritesOnly
+            ? `お気に入りの${course}はまだありません。レシピを開いて「☆ お気に入りにする」を押すと、ここに出ます`
+            : `${course}のレシピはまだありません`}
+        </div>
       ) : (
         <ul className="list">
           {sorted.map((r) => (
