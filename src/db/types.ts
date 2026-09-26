@@ -291,3 +291,26 @@ export interface PlanDraft {
   /** 料理の指定(この機能より前の下書きにはないので、読むときは ?? [] にする) */
   fixed?: FixedDish[];
 }
+
+/**
+ * 「この日の献立を作り直す」の途中(作り直し用の下書き)。3日分用の下書きとは別に1件だけ持つ。
+ * 作り直しを始めたときに保存し、タブの切り替えやアプリを閉じても残す。「やめる」か「確定」で消す。
+ * 書き出し・読み込みの対象にはしない
+ */
+export interface RebuildDraft {
+  id: 'rebuild';
+  savedAt: DateTimeString;
+  mealSetId: string;
+  /** 作り直す日(献立セットの中の何日目。0始まり) */
+  dayIndex: number;
+  conditions: PlanConditions;
+  /** 料理の指定(1日分なので dayIndex はいつも 0) */
+  fixed: FixedDish[];
+  /** 1日分の提案。条件を選んでいる途中なら null */
+  day: DraftDay | null;
+  /** 枠ごとに、入れ替えですでに見せた品 */
+  shown: Record<string, string[]>;
+}
+
+/** 下書きの表に入るもの(3日分用と作り直し用) */
+export type AnyDraft = PlanDraft | RebuildDraft;

@@ -119,7 +119,8 @@ function buildTrial(
   const limit = data.household.shoppingLimitPerMeal;
   // 指定した料理は、アプリが選ぶ品には使わない(同じ献立セットの中で同じレシピは出さない)
   const fixedIds = prepared.flatMap((d) => Object.values(d.fixed).map((r) => r.id));
-  let state: DayState = { stock: initial, history: [...data.history], usedRecipeIds: new Set(fixedIds) };
+  const usedRecipeIds = new Set([...fixedIds, ...(request.excludeRecipeIds ?? [])]);
+  let state: DayState = { stock: initial, history: [...data.history], usedRecipeIds };
   let total = 0;
   const days: PlannedDay[] = [];
 

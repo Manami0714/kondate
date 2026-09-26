@@ -49,9 +49,11 @@ export function swapDish(
     }),
   );
   // 同じ献立セットのほかの枠で使っているレシピ(同じセットの中で同じレシピは出さない)
-  const usedElsewhere = new Set(
-    current.flatMap((d, i) => COURSE_SLOTS.filter((s) => !(i === dayIndex && s.key === key)).map((s) => d[s.key])),
-  );
+  // (作り直しでは、同じセットのほかの日のレシピも request.excludeRecipeIds で渡される)
+  const usedElsewhere = new Set([
+    ...current.flatMap((d, i) => COURSE_SLOTS.filter((s) => !(i === dayIndex && s.key === key)).map((s) => d[s.key])),
+    ...(request.excludeRecipeIds ?? []),
+  ]);
   const options = day.candidates[slot.course].filter(
     (r) =>
       r.id !== currentId &&

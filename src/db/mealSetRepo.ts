@@ -1,7 +1,7 @@
 // 献立セットの確定・キャンセル・買った・作ったを、データベースに保存する
 // 計算は logic/mealSet.ts の純粋関数に任せ、ここでは在庫・在庫の動き・献立セットを1つのトランザクションで書き込むだけ
 import type { KondateDB } from './db';
-import { deleteDraft } from './draftRepo';
+import { deleteDraft, deleteRebuildDraft } from './draftRepo';
 import type { MealSet, Stock } from './types';
 import { randomId, type IdGenerator } from '../logic/id';
 import {
@@ -10,9 +10,12 @@ import {
   confirmPlan,
   markBought,
   markCooked,
+  refillDay,
+  unmarkCooked,
   type ConfirmInput,
   type MealSetChange,
   type MealSetResult,
+  type RefillInput,
 } from '../logic/mealSet';
 
 async function saveChange(db: KondateDB, change: MealSetChange): Promise<void> {
@@ -71,4 +74,26 @@ export function markBoughtInDb(
 
 export function markCookedInDb(db: KondateDB, mealSetId: string, dayIndex: number) {
   return update(db, mealSetId, (set) => markCooked(set, dayIndex));
+}
+
+export function unmarkCookedInDb(db: KondateDB, mealSetId: string, dayIndex: number) {
+  return update(db, mealSetId, (set) => unmarkCooked(set, dayIndex));
+}
+
+/** キャンセルした日を作り直した献立で埋める。在庫は保存する直前に読み直す。うまくいったら作り直し用の下書きを消す */
+export async function refillDayInDb(
+  db: KondateDB,
+  input: Omit<RefillInput, 'set' | 'data'> & { mealSetId: string; data: Omit<RefillInput['data'], 'stocks'> },
+): Promise<MealSetResult> {
+  return db.transaction('rw', db.stocks, db.stockMoves, db.mealSets, db.planDrafts, async () => {
+    const set = await db.mealSets.get(input.mealSetId);
+    if (!set) return { ok: false, error: '献立セットが見つかりません' } as const;
+    const stocks = await db.stocks.toArray();
+    const result = refillDay({ ...input, set, data: { ...input.data, stocks } });
+    if (result.ok) {
+      await saveChange(db, result.change);
+      await deleteRebuildDraft(db);
+    }
+    return result;
+  });
 }

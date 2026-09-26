@@ -8,6 +8,7 @@ import type {
   MealSet,
   MealStatus,
   PlanConditions,
+  Recipe,
   ReservedFood,
   ShoppingItem,
   Stock,
@@ -100,6 +101,38 @@ export interface ConfirmInput {
   newId: IdGenerator;
 }
 
+/** 1日分の3品に使う食材を在庫から確保し、足りない分を買い足しの行にする(常備調味料は減らさない) */
+function reserveDay(
+  ledger: Ledger,
+  day: PlannedDay,
+  dayIndex: number,
+  data: PlannerData,
+  recipesById: ReadonlyMap<string, Recipe>,
+): { reserved: ReservedFood[]; shopping: ShoppingItem[] } {
+  const members = day.memberIds.map((id) => data.membersById.get(id)).filter((m) => m !== undefined);
+  const total = totalPortion(members);
+  const reserved: ReservedFood[] = [];
+  const lack = new Map<string, number>();
+  for (const slot of COURSE_SLOTS) {
+    const recipe = recipesById.get(day[slot.key]);
+    if (!recipe) continue;
+    for (const ing of scaleIngredients(recipe, total)) {
+      if (data.pantryIds.has(ing.foodId)) continue;
+      const r = ledger.take(ing.foodId, ing.amount, dayIndex);
+      if (r) reserved.push(r);
+      const short = roundAmount(ing.amount - (r?.amount ?? 0));
+      if (short > 0) lack.set(ing.foodId, roundAmount((lack.get(ing.foodId) ?? 0) + short));
+    }
+  }
+  const shopping = [...lack].map(([foodId, amount]): ShoppingItem => ({ dayIndex, foodId, amount, bought: false }));
+  return { reserved, shopping };
+}
+
+/** 提案の1日分を、献立セットの1日(予定)にする */
+function toMealDay(d: PlannedDay): MealDay {
+  return { date: d.date, mainId: d.mainId, sideId: d.sideId, soupId: d.soupId, memberIds: [...d.memberIds], status: '予定' };
+}
+
 /** 献立を確定する:在庫にある分だけ減らし、足りない分を買い足しリストに出す(常備調味料は減らさない) */
 export function confirmPlan(input: ConfirmInput): MealSetChange {
   const { data } = input;
@@ -109,34 +142,15 @@ export function confirmPlan(input: ConfirmInput): MealSetChange {
   const shopping: ShoppingItem[] = [];
 
   input.days.forEach((day, dayIndex) => {
-    const members = day.memberIds.map((id) => data.membersById.get(id)).filter((m) => m !== undefined);
-    const total = totalPortion(members);
-    const lack = new Map<string, number>();
-    for (const slot of COURSE_SLOTS) {
-      const recipe = recipesById.get(day[slot.key]);
-      if (!recipe) continue;
-      for (const ing of scaleIngredients(recipe, total)) {
-        if (data.pantryIds.has(ing.foodId)) continue;
-        const r = ledger.take(ing.foodId, ing.amount, dayIndex);
-        if (r) reserved.push(r);
-        const short = roundAmount(ing.amount - (r?.amount ?? 0));
-        if (short > 0) lack.set(ing.foodId, roundAmount((lack.get(ing.foodId) ?? 0) + short));
-      }
-    }
-    for (const [foodId, amount] of lack) shopping.push({ dayIndex, foodId, amount, bought: false });
+    const result = reserveDay(ledger, day, dayIndex, data, recipesById);
+    reserved.push(...result.reserved);
+    shopping.push(...result.shopping);
   });
 
   const mealSet: MealSet = {
     id: input.id,
     startDate: input.startDate,
-    days: input.days.map((d) => ({
-      date: d.date,
-      mainId: d.mainId,
-      sideId: d.sideId,
-      soupId: d.soupId,
-      memberIds: [...d.memberIds],
-      status: '予定',
-    })),
+    days: input.days.map(toMealDay),
     status: '予定',
     reserved,
     conditions: input.conditions,
@@ -193,6 +207,52 @@ export function markCooked(set: MealSet, dayIndex: number): MealSetResult {
   if (!day || day.status !== '予定') return { ok: false, error: '「予定」の献立だけ「作った」にできます' };
   const days = set.days.map((d, i) => (i === dayIndex ? { ...d, status: '作った' as const } : d));
   return { ok: true, change: { mealSet: { ...set, days, status: setStatus(days) }, stocks: new Map(), moves: [] } };
+}
+
+/** 「作った」を取り消して「予定」に戻す。在庫は変えない(作ったときにも在庫は動かしていないため) */
+export function unmarkCooked(set: MealSet, dayIndex: number): MealSetResult {
+  const day = set.days[dayIndex];
+  if (!day || day.status !== '作った') return { ok: false, error: '「作った」の献立だけ取り消せます' };
+  const days = set.days.map((d, i) => (i === dayIndex ? { ...d, status: '予定' as const } : d));
+  return { ok: true, change: { mealSet: { ...set, days, status: setStatus(days) }, stocks: new Map(), moves: [] } };
+}
+
+export interface RefillInput {
+  set: MealSet;
+  dayIndex: number;
+  /** 作り直した1日分の提案 */
+  day: PlannedDay;
+  data: PlannerData;
+  now: Date;
+  newId: IdGenerator;
+}
+
+/**
+ * キャンセルした日を作り直した献立で埋める:その日を「予定」に戻し、その日の分の在庫を減らして、
+ * 足りない分を同じ献立セットの買い足しリストに足す。確保した量も記録するので、あとでその日をキャンセルすれば元に戻る
+ */
+export function refillDay(input: RefillInput): MealSetResult {
+  const { set, dayIndex, day, data } = input;
+  const current = set.days[dayIndex];
+  if (!current || current.status !== 'キャンセル') return { ok: false, error: 'キャンセルした日だけ作り直せます' };
+  if (day.date !== current.date) return { ok: false, error: '作り直す日の日付が違います' };
+
+  const recipesById = new Map(data.recipes.map((r) => [r.id, r]));
+  const ledger = new Ledger(data.stocks, input.now, input.newId, set.id);
+  const { reserved, shopping } = reserveDay(ledger, day, dayIndex, data, recipesById);
+  const days = set.days.map((d, i) => (i === dayIndex ? toMealDay(day) : d));
+  const overLimitDays = set.overLimitDays.filter((i) => i !== dayIndex);
+  if (day.overLimit) overLimitDays.push(dayIndex);
+
+  const mealSet: MealSet = {
+    ...set,
+    days,
+    status: setStatus(days),
+    reserved: [...set.reserved, ...reserved],
+    shopping: [...set.shopping, ...shopping],
+    overLimitDays: overLimitDays.sort((a, b) => a - b),
+  };
+  return { ok: true, change: { mealSet, ...ledger.effect() } };
 }
 
 /** 買い足しリストの1行(食材ごとにまとめたもの) */

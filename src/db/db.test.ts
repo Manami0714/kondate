@@ -211,6 +211,71 @@ describe('確定前の提案(下書き)', () => {
     expect(await loadDraft(db)).toBeNull();
     expect(await db.mealSets.count()).toBe(1);
   });
+
+  it('3日分用と作り直し用を1件ずつ持てる。作り直しの確定では作り直し用だけが消え、3日分の確定では3日分用だけが消える', async () => {
+    const { saveDraft, loadDraft, saveRebuildDraft, loadRebuildDraft, deleteRebuildDraft } = await import('./draftRepo');
+    const { confirmPlanToDb, cancelDayInDb, refillDayInDb } = await import('./mealSetRepo');
+    const { plannerData, member, conditions, days } = await import('../logic/planner/testing');
+    const db = freshDb();
+    const planned = days(['a'], '2026-10-01').map((d) => ({ ...d, mainId: 'init_nikujaga', sideId: 'init_kinpira', soupId: 'init_tonjiru', overLimit: false }));
+    const data = plannerData({ recipes: await db.recipes.toArray(), members: [member('a')] });
+    await confirmPlanToDb(db, { id: 's1', startDate: planned[0].date, days: planned, conditions: conditions(), guests: [], data, now: day1, newId: sequentialIds('c') });
+    await cancelDayInDb(db, 's1', 0, day1, sequentialIds('x'));
+
+    const planDraft = {
+      savedAt: day1.toISOString(),
+      startDate: '2026-10-04',
+      conditions: conditions(),
+      addedGuests: [],
+      guests: [],
+      days: days(['a'], '2026-10-04').map((d) => ({ ...d, mainId: 'init_nikujaga', sideId: 'init_kinpira', soupId: 'init_tonjiru', overLimit: false })),
+      shown: {},
+    };
+    const rebuildDraft = {
+      savedAt: day1.toISOString(),
+      mealSetId: 's1',
+      dayIndex: 0,
+      conditions: conditions('らくらく'),
+      fixed: [{ dayIndex: 0, course: '主菜' as const, recipeId: 'init_ginger_pork' }],
+      day: null,
+      shown: {},
+    };
+    await saveDraft(db, planDraft);
+    await saveRebuildDraft(db, rebuildDraft);
+    // タブの切り替えやアプリを閉じたあとに読み直しても、両方残っている
+    expect(await loadDraft(db)).toEqual({ ...planDraft, id: 'draft' });
+    expect(await loadRebuildDraft(db)).toEqual({ ...rebuildDraft, id: 'rebuild' });
+    expect(Object.keys(await db.readAll())).not.toContain('planDrafts');
+
+    // 「やめる」で作り直し用だけ消える
+    await deleteRebuildDraft(db);
+    expect(await loadRebuildDraft(db)).toBeNull();
+    expect(await loadDraft(db)).not.toBeNull();
+
+    // 作り直しの確定で作り直し用だけ消える
+    await saveRebuildDraft(db, { ...rebuildDraft, day: { ...planned[0], mainId: 'init_ginger_pork' } });
+    const result = await refillDayInDb(db, {
+      mealSetId: 's1',
+      dayIndex: 0,
+      day: { ...planned[0], mainId: 'init_ginger_pork' },
+      data,
+      now: day1,
+      newId: sequentialIds('r'),
+    });
+    expect(result.ok).toBe(true);
+    const refilled = await db.mealSets.get('s1');
+    expect(refilled?.days[0]).toMatchObject({ mainId: 'init_ginger_pork', status: '予定' });
+    // 在庫がないので、作り直した日の材料は買い足しに入る
+    expect(refilled?.shopping.some((s) => s.dayIndex === 0)).toBe(true);
+    expect(await loadRebuildDraft(db)).toBeNull();
+    expect(await loadDraft(db)).not.toBeNull();
+
+    // 3日分の確定では、作り直し用は消えない
+    await saveRebuildDraft(db, rebuildDraft);
+    await confirmPlanToDb(db, { id: 's2', startDate: '2026-10-04', days: planDraft.days, conditions: conditions(), guests: [], data, now: day1, newId: sequentialIds('d') });
+    expect(await loadDraft(db)).toBeNull();
+    expect(await loadRebuildDraft(db)).not.toBeNull();
+  });
 });
 
 describe('フェーズ3:昼食・評価・お気に入り・読まない言葉の保存', () => {

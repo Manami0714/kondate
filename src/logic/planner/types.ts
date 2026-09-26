@@ -42,6 +42,8 @@ export interface PlanRequest {
   conditions: PlanConditions;
   /** 料理の指定。指定した枠はそのレシピに固定し、残りの品を選ぶ(なければ指定なし) */
   fixed?: readonly FixedDish[];
+  /** アプリが選ばないレシピ(作り直しで、同じ献立セットのほかの日に使っているもの)。指定した料理には効かない */
+  excludeRecipeIds?: readonly string[];
 }
 
 /** 1日の3品 */

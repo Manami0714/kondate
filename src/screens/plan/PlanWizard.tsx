@@ -8,7 +8,7 @@ import type { DateString, FixedDish, GuestStay, PlanDraft } from '../../db/types
 import type { PlannerSource } from '../../hooks/usePlannerData';
 import { toDateTimeString } from '../../logic/date';
 import { randomId } from '../../logic/id';
-import { buildDays, carryOverGuests, defaultStartDate, overlapsExisting } from '../../logic/planner/days';
+import { buildDays, carryOverGuests, defaultStartDate, nextFreeStartDate, overlapMessage, overlappingDays } from '../../logic/planner/days';
 import { fixedRecipeId, needsConfirm, removeFixed, setFixed, warningsForSlot } from '../../logic/planner/fixed';
 import { pinDish } from '../../logic/planner/pin';
 import { makePlan } from '../../logic/planner/plan';
@@ -47,6 +47,8 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
   /** 枠ごとに、すでに見せた品(入れ替えで同じ品に戻らないようにする) */
   const [shown, setShown] = useState<Record<string, string[]>>(() => draft?.shown ?? {});
   const [errors, setErrors] = useState<string[]>([]);
+  /** 日付が重なったときに勧める開始日(次に作れる日) */
+  const [suggestedStart, setSuggestedStart] = useState<DateString | null>(null);
   const [busy, setBusy] = useState(false);
   const [opened, setOpened] = useState<{ dish: DishDetail; label: string } | null>(null);
   /** 提案の画面で、料理を選んでいる枠 */
@@ -105,10 +107,13 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
   };
 
   const propose = () => {
-    if (overlapsExisting(src.mealSets, cond.startDate)) {
-      setErrors(['この日付にはすでに献立があります。開始日を変えてください']);
+    const overlaps = overlappingDays(src.mealSets, cond.startDate);
+    if (overlaps.length > 0) {
+      setErrors([overlapMessage(overlaps)]);
+      setSuggestedStart(nextFreeStartDate(src.mealSets, cond.startDate));
       return;
     }
+    setSuggestedStart(null);
     const req: PlanRequest = { days: conditionDays, conditions: cond.conditions, fixed: cond.fixed };
     const result = makePlan(req, src.data, defaultRng);
     if (!result.ok) {
@@ -197,7 +202,15 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
       ) : (
         <ConditionForm
           value={cond}
-          onChange={setCond}
+          onChange={(next) => {
+            // 開始日を変えたら、重なりのエラーと勧めた日は消す
+            if (next.startDate !== cond.startDate) {
+              setErrors([]);
+              setSuggestedStart(null);
+            }
+            setCond(next);
+          }}
+          suggestedStart={suggestedStart}
           members={src.members}
           mealSets={src.mealSets}
           days={conditionDays}

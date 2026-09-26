@@ -25,6 +25,8 @@ interface Props {
   onRetry: () => void;
   onBack: () => void;
   onConfirm: () => void;
+  /** 確定ボタンの文言(作り直しでは「この日の献立で確定」) */
+  confirmLabel?: string;
 }
 
 /** 3日分の提案:1品ずつ入れ替え・料理の指定ができる */
@@ -44,6 +46,7 @@ export function ProposalView({
   onRetry,
   onBack,
   onConfirm,
+  confirmLabel = 'この献立で確定(在庫から減らす)',
 }: Props) {
   const shoppingText = (day: DaySummary) =>
     [...day.shopping]
@@ -100,7 +103,7 @@ export function ProposalView({
 
       <ErrorList errors={errors} />
       <button type="button" className="btn btn-primary btn-block" disabled={busy} onClick={onConfirm}>
-        この献立で確定(在庫から減らす)
+        {confirmLabel}
       </button>
       <div className="btn-row">
         <button type="button" className="btn" onClick={onBack}>

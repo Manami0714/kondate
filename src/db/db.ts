@@ -15,13 +15,13 @@ import {
 import type { Obj } from '../logic/validate';
 import type {
   AllData,
+  AnyDraft,
   Feedback,
   Food,
   HouseholdPrefs,
   IgnoredWord,
   MealSet,
   Member,
-  PlanDraft,
   PantryItem,
   Recipe,
   Stock,
@@ -39,8 +39,8 @@ export class KondateDB extends Dexie {
   stockMoves!: EntityTable<StockMove, 'id'>;
   feedbacks!: EntityTable<Feedback, 'id'>;
   ignoredWords!: EntityTable<IgnoredWord, 'word'>;
-  /** 確定前の献立の提案(下書き)。書き出し・読み込みの対象外 */
-  planDrafts!: EntityTable<PlanDraft, 'id'>;
+  /** 確定前の献立の提案(下書き。3日分用と作り直し用が1件ずつ)。書き出し・読み込みの対象外 */
+  planDrafts!: EntityTable<AnyDraft, 'id'>;
 
   constructor(name = 'kondate') {
     super(name);
