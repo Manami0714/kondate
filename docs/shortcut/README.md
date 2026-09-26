@@ -27,7 +27,7 @@ Safari で開いたレシピのページから、**料理名・材料と分量�
 7. アクションの中の文字(最初から入っている見本のスクリプト)をすべて消し、
    [`kondate-import.js`](kondate-import.js) の中身をまるごと貼り付ける
    - iPhone でコピーするには、Safari で次のページを開き、文字を長押し →「すべてを選択」→「コピー」
-     `https://raw.githubusercontent.com/Manami0714/kondate/main/docs/shortcut/kondate-import.js`
+     `https://raw.githubusercontent.com/Creative-Hues/kondate/main/docs/shortcut/kondate-import.js`
    - 最初の行「// みっかごはん:…」から、最後の行「})();」までがすべて入っていることを確かめる
 8. 検索欄に「クリップボード」と入れ、「**クリップボードにコピー**」を追加する
    (中身が「JavaScript の結果」になっていることを確かめる)
