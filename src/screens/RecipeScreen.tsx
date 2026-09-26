@@ -9,8 +9,16 @@ import { DIFFICULTY_LABELS } from '../logic/format';
 import { hasMainFlags } from '../logic/planner/mainFoods';
 import { RecipeDetail } from './RecipeDetail';
 import { RecipeForm } from './RecipeForm';
+import { ImportSheet } from './recipe/ImportSheet';
 
-type Mode = { type: 'none' } | { type: 'view'; recipe: Recipe } | { type: 'edit'; recipe: Recipe | null };
+type Mode =
+  | { type: 'none' }
+  | { type: 'view'; recipe: Recipe }
+  | { type: 'edit'; recipe: Recipe | null }
+  | { type: 'import' };
+
+/** 編集・削除できるレシピ(初期レシピ以外) */
+const isEditable = (r: Recipe) => r.source !== '初期';
 
 export function RecipeScreen() {
   const foodData = useFoods();
@@ -33,9 +41,14 @@ export function RecipeScreen() {
     <>
       <div className="screen-header">
         <h1 className="screen-title">レシピ</h1>
-        <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'edit', recipe: null })}>
-          ＋ マイレシピ
-        </button>
+        <div className="header-actions">
+          <button type="button" className="btn btn-text" onClick={() => setMode({ type: 'import' })}>
+            URLから取り込み
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'edit', recipe: null })}>
+            ＋ マイレシピ
+          </button>
+        </div>
       </div>
       <div className="filter-row">
         <SingleChoice<Course> options={['主菜', '副菜', '汁物']} value={course} onChange={setCourse} />
@@ -85,7 +98,7 @@ export function RecipeScreen() {
           title={mode.recipe.name}
           onClose={close}
           action={
-            mode.recipe.source === 'マイレシピ' && (
+            isEditable(mode.recipe) && (
               <button
                 type="button"
                 className="btn btn-small"
@@ -101,7 +114,7 @@ export function RecipeScreen() {
           }
         >
           <RecipeDetail recipe={mode.recipe} byId={foodData.byId} />
-          {mode.recipe.source === 'マイレシピ' && (
+          {isEditable(mode.recipe) && (
             <div style={{ marginTop: 24 }}>
               <button
                 type="button"
@@ -120,7 +133,10 @@ export function RecipeScreen() {
       )}
 
       {mode.type === 'edit' && (
-        <Sheet title={mode.recipe ? 'マイレシピを編集' : 'マイレシピを追加'} onClose={close}>
+        <Sheet
+          title={mode.recipe ? `${mode.recipe.source === 'URL' ? 'URLレシピ' : 'マイレシピ'}を編集` : 'マイレシピを追加'}
+          onClose={close}
+        >
           <RecipeForm
             recipe={mode.recipe}
             foods={foodData.foods}
@@ -131,6 +147,18 @@ export function RecipeScreen() {
             }}
           />
         </Sheet>
+      )}
+
+      {mode.type === 'import' && (
+        <ImportSheet
+          foods={foodData.foods}
+          byId={foodData.byId}
+          onClose={close}
+          onSaved={(saved) => {
+            setCourse(saved.course);
+            setMode({ type: 'view', recipe: saved });
+          }}
+        />
       )}
     </>
   );

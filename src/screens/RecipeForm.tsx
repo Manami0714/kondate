@@ -47,7 +47,7 @@ function toDraft(r: Recipe | null): RecipeDraft {
   };
 }
 
-/** マイレシピの登録・編集 */
+/** マイレシピの登録・編集(URL レシピの編集にも使う) */
 export function RecipeForm({ recipe, foods, byId, onDone }: Props) {
   const [draft, setDraft] = useState<RecipeDraft>(() => toDraft(recipe));
   const [errors, setErrors] = useState<string[]>([]);
@@ -66,7 +66,9 @@ export function RecipeForm({ recipe, foods, byId, onDone }: Props) {
     );
 
   const save = async () => {
-    const result = validateRecipeDraft(draft, recipe?.id ?? `my_${randomId()}`, byId);
+    // 出どころと URL はそのまま引き継ぐ(新しく作るときはマイレシピ)
+    const origin = recipe ? { source: recipe.source, url: recipe.url } : undefined;
+    const result = validateRecipeDraft(draft, recipe?.id ?? `my_${randomId()}`, byId, origin);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -172,9 +174,17 @@ export function RecipeForm({ recipe, foods, byId, onDone }: Props) {
       </Field>
 
       <h3 className="section-title">手順</h3>
-      <Field label="手順" hint="1行に1つの手順を書きます">
-        <textarea className="textarea" value={draft.stepsText} onChange={(e) => set('stepsText', e.target.value)} />
-      </Field>
+      {recipe?.source === 'URL' ? (
+        <Field label="レシピのページ" hint="URL のレシピは、手順をそのページで見ます">
+          <span className="muted" style={{ wordBreak: 'break-all' }}>
+            {recipe.url}
+          </span>
+        </Field>
+      ) : (
+        <Field label="手順" hint="1行に1つの手順を書きます">
+          <textarea className="textarea" value={draft.stepsText} onChange={(e) => set('stepsText', e.target.value)} />
+        </Field>
+      )}
 
       <ErrorList errors={errors} />
       <button type="button" className="btn btn-primary btn-block" onClick={save}>

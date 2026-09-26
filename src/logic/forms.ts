@@ -11,6 +11,7 @@ import type {
   Member,
   MemberKind,
   Recipe,
+  RecipeSource,
   Sex,
 } from '../db/types';
 import { findFoodByExactName } from './foodSearch';
@@ -205,10 +206,21 @@ export interface RecipeDraft {
   favorite: boolean;
 }
 
+/** レシピの出どころと URL(マイレシピは URL なし) */
+export interface RecipeOrigin {
+  source: RecipeSource;
+  url: string | null;
+}
+
+/**
+ * レシピの入力を確かめる。origin を渡さなければマイレシピとして扱う。
+ * URL レシピは手順を持たない(手順はそのページで見る)
+ */
 export function validateRecipeDraft(
   draft: RecipeDraft,
   id: string,
   byId: ReadonlyMap<string, Food>,
+  origin: RecipeOrigin = { source: 'マイレシピ', url: null },
 ): FormResult<Recipe> {
   const errors: string[] = [];
   const name = draft.name.trim();
@@ -228,10 +240,13 @@ export function validateRecipeDraft(
   if (servings === null || servings <= 0 || !Number.isInteger(servings)) errors.push('基準の人数は1以上の整数にしてください');
   const minutes = parseAmount(draft.minutes);
   if (minutes === null || minutes <= 0 || !Number.isInteger(minutes)) errors.push('調理時間は1以上の整数(分)にしてください');
-  const steps = draft.stepsText
-    .split('\n')
-    .map((s) => s.trim())
-    .filter((s) => s !== '');
+  const steps =
+    origin.source === 'URL'
+      ? []
+      : draft.stepsText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter((s) => s !== '');
   if (errors.length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -246,8 +261,8 @@ export function validateRecipeDraft(
       methods: [...draft.methods],
       flavors: [...draft.flavors],
       steps,
-      source: 'マイレシピ',
-      url: null,
+      source: origin.source,
+      url: origin.url,
       favorite: draft.favorite,
     },
   };
