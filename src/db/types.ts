@@ -194,7 +194,8 @@ export interface MealSet {
   overLimitDays: number[];
 }
 
-export type StockMoveReason = '購入' | '夕飯' | '昼食' | '手直し' | 'キャンセルで戻す';
+/** 在庫の動きの理由。「整理で削除」は在庫の整理でまとめて消した分で、好みの学習の集計では数えない */
+export type StockMoveReason = '購入' | '夕飯' | '昼食' | '手直し' | 'キャンセルで戻す' | '整理で削除';
 
 /** 在庫の動き */
 export interface StockMove {

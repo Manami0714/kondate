@@ -7,7 +7,7 @@ import { INITIAL_RECIPES } from '../data/recipes';
 import { parseBackup, serializeBackup } from '../logic/backup';
 import { sequentialIds } from '../logic/id';
 import { KondateDB } from './db';
-import { addStockToDb, removeStockFromDb, setStockAmountInDb } from './stockRepo';
+import { addStockToDb, removeStockFromDb, setStockAmountInDb, tidyUpStocksInDb } from './stockRepo';
 
 let n = 0;
 const opened: KondateDB[] = [];
@@ -54,6 +54,26 @@ describe('在庫の保存', () => {
       [-4, '手直し'],
       [-12, '手直し'],
     ]);
+  });
+
+  it('在庫の整理:選んだ食材をまとめて消し、「整理で削除」の動きは書き出し・読み込みでも残る', async () => {
+    const db = freshDb();
+    const ids = sequentialIds();
+    await addStockToDb(db, 'egg', 6, day1, ids);
+    await addStockToDb(db, 'onion', 3, day1, ids);
+    await addStockToDb(db, 'milk', 1000, day1, ids);
+
+    await tidyUpStocksInDb(db, ['egg', 'milk'], day2, ids);
+    expect((await db.stocks.toArray()).map((s) => s.foodId)).toEqual(['onion']);
+    const tidied = (await db.stockMoves.toArray()).filter((m) => m.reason === '整理で削除');
+    expect(tidied.map((m) => [m.foodId, m.delta]).sort()).toEqual([
+      ['egg', -6],
+      ['milk', -1000],
+    ]);
+
+    const parsed = parseBackup(serializeBackup(await db.readAll(), day2));
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.data.stockMoves.filter((m) => m.reason === '整理で削除')).toHaveLength(2);
   });
 });
 

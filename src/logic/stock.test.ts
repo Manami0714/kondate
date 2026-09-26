@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { INITIAL_FOODS } from '../data/foods';
 import type { Stock } from '../db/types';
 import { sequentialIds } from './id';
-import { addStock, changeStock, removeStock, setStockAmount } from './stock';
+import { addStock, changeStock, isPastShelfLife, removeStock, setStockAmount, tidyUpStocks } from './stock';
 
 // テスト用の固定の日付(地域時刻で作る)
 const day1 = new Date(2026, 8, 25, 10, 0, 0);
@@ -137,5 +138,32 @@ describe('キャンセルで戻すときの追加日', () => {
       restoreAddedDate: '2026-09-20',
     });
     expect(newer.stock?.addedDate).toBe('2026-09-18');
+  });
+});
+
+describe('在庫の整理', () => {
+  const egg = INITIAL_FOODS.find((f) => f.id === 'egg')!; // 保存の目安 14日
+
+  it('保存の目安は、追加日+目安日数の日までは過ぎておらず、その翌日から過ぎている', () => {
+    const stock: Stock = { foodId: 'egg', amount: 6, addedDate: '2026-09-20' };
+    expect(isPastShelfLife(stock, egg, '2026-10-04')).toBe(false);
+    expect(isPastShelfLife(stock, egg, '2026-10-05')).toBe(true);
+  });
+
+  it('選んだ食材だけを在庫から消し、「整理で削除」の動きを残す。在庫にない食材と、2回選んだ食材は1回だけ扱う', () => {
+    const stocks: Stock[] = [
+      { foodId: 'egg', amount: 6, addedDate: '2026-09-20' },
+      { foodId: 'onion', amount: 2.5, addedDate: '2026-09-10' },
+      { foodId: 'milk', amount: 500, addedDate: '2026-09-24' },
+    ];
+    const result = tidyUpStocks(stocks, ['egg', 'onion', 'egg', 'cabbage'], day3, sequentialIds('t'));
+    expect(result.map((r) => [r.foodId, r.change.stock])).toEqual([
+      ['egg', null],
+      ['onion', null],
+    ]);
+    expect(result.map((r) => [r.change.move?.delta, r.change.move?.reason])).toEqual([
+      [-6, '整理で削除'],
+      [-2.5, '整理で削除'],
+    ]);
   });
 });

@@ -1,7 +1,7 @@
 // 在庫の増減(純粋関数)
 // 在庫を変えるときは、必ずこの関数で「新しい在庫」と「在庫の動き」を一緒に作る
-import type { DateString, Stock, StockMove, StockMoveReason } from '../db/types';
-import { toDateString, toDateTimeString } from './date';
+import type { DateString, Food, Stock, StockMove, StockMoveReason } from '../db/types';
+import { addDays, toDateString, toDateTimeString } from './date';
 import type { IdGenerator } from './id';
 
 export interface StockChange {
@@ -92,4 +92,27 @@ export function setStockAmount(
 /** 在庫から消す */
 export function removeStock(current: Stock, now: Date, newId: IdGenerator): StockChange {
   return setStockAmount(current, current.foodId, 0, now, newId);
+}
+
+/** 保存の目安を過ぎたか:追加日+保存の目安日数の日より後なら true(その日までは過ぎていない) */
+export function isPastShelfLife(stock: Stock, food: Food, today: DateString): boolean {
+  return today > addDays(stock.addedDate, food.shelfLifeDays);
+}
+
+/**
+ * 在庫の整理:選んだ食材を在庫からまとめて消す(理由:整理で削除)。
+ * 在庫にない食材は飛ばす。同じ食材を2回選んでも1回だけ消す
+ */
+export function tidyUpStocks(
+  stocks: readonly Stock[],
+  foodIds: readonly string[],
+  now: Date,
+  newId: IdGenerator,
+): { foodId: string; change: StockChange }[] {
+  const byId = new Map(stocks.map((s) => [s.foodId, s]));
+  return [...new Set(foodIds)].flatMap((foodId) => {
+    const current = byId.get(foodId);
+    if (!current) return [];
+    return [{ foodId, change: changeStock({ current, foodId, delta: -current.amount, reason: '整理で削除', now, newId }) }];
+  });
 }

@@ -4,14 +4,16 @@ import { ErrorList, Field } from '../components/Field';
 import { FoodPicker } from '../components/FoodPicker';
 import { Sheet } from '../components/Sheet';
 import { db } from '../db/db';
-import { addStockToDb, removeStockFromDb, setStockAmountInDb } from '../db/stockRepo';
+import { addStockToDb, removeStockFromDb, setStockAmountInDb, tidyUpStocksInDb } from '../db/stockRepo';
 import type { Food, Stock } from '../db/types';
 import { useFoods } from '../hooks/useFoods';
-import { formatShortDate } from '../logic/date';
+import { formatShortDate, toDateString } from '../logic/date';
 import { parseAmount } from '../logic/forms';
 import { amountToInput, formatAmount } from '../logic/format';
+import { isPastShelfLife } from '../logic/stock';
 import { LunchSheet } from './stock/LunchSheet';
 import { PasteSheet } from './stock/PasteSheet';
+import { TidyBar } from './stock/TidyBar';
 
 type Mode =
   | { type: 'none' }
@@ -21,9 +23,13 @@ type Mode =
 
 export function StockScreen() {
   const foodData = useFoods();
+  const today = toDateString(new Date());
   const stocks = useLiveQuery(() => db.stocks.toArray(), []);
   const ignoredWords = useLiveQuery(() => db.ignoredWords.toArray(), []);
   const [mode, setMode] = useState<Mode>({ type: 'none' });
+  /** 在庫の整理中なら、選んだ食材ID。整理していなければ null */
+  const [tidy, setTidy] = useState<ReadonlySet<string> | null>(null);
+  const [busy, setBusy] = useState(false);
 
   if (!foodData || !stocks || !ignoredWords) return <p className="muted">読み込み中…</p>;
   const { foods, byId } = foodData;
@@ -32,7 +38,32 @@ export function StockScreen() {
   const rows = stocks
     .map((s) => ({ stock: s, food: byId.get(s.foodId) }))
     .filter((r): r is { stock: Stock; food: Food } => r.food !== undefined)
-    .sort((a, b) => a.food.name.localeCompare(b.food.name, 'ja'));
+    .sort((a, b) => a.food.name.localeCompare(b.food.name, 'ja'))
+    .map((r) => ({ ...r, past: isPastShelfLife(r.stock, r.food, today) }));
+  const pastIds = rows.filter((r) => r.past).map((r) => r.food.id);
+  /** 選んだ食材のうち、今も在庫にあるもの(整理中に在庫が消えた食材は数えない) */
+  const selectedIds = tidy ? rows.filter((r) => tidy.has(r.food.id)).map((r) => r.food.id) : [];
+
+  const toggle = (foodId: string) => {
+    if (!tidy) return;
+    const next = new Set(tidy);
+    if (next.has(foodId)) next.delete(foodId);
+    else next.add(foodId);
+    setTidy(next);
+  };
+
+  /** 選んだ食材をまとめて在庫から消す(理由は聞かず、在庫の動きに「整理で削除」と記録する) */
+  const removeSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`${selectedIds.length}品を在庫から消します`)) return;
+    setBusy(true);
+    try {
+      await tidyUpStocksInDb(db, selectedIds, new Date());
+      setTidy(null);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const close = () => setMode({ type: 'none' });
 
@@ -44,31 +75,64 @@ export function StockScreen() {
           ＋ 追加
         </button>
       </div>
-      <div className="btn-row" style={{ marginBottom: 12 }}>
-        <button type="button" className="btn" onClick={() => setMode({ type: 'paste' })}>
-          貼り付けで追加
-        </button>
-        <button type="button" className="btn" onClick={() => setMode({ type: 'lunch' })}>
-          昼に使った
-        </button>
-      </div>
+      {tidy ? (
+        <TidyBar
+          selectedCount={selectedIds.length}
+          pastCount={pastIds.length}
+          busy={busy}
+          onSelectPast={() => setTidy(new Set([...tidy, ...pastIds]))}
+          onClear={() => setTidy(new Set())}
+          onRemove={() => void removeSelected()}
+          onClose={() => setTidy(null)}
+        />
+      ) : (
+        <div className="btn-row" style={{ marginBottom: 12 }}>
+          <button type="button" className="btn" onClick={() => setMode({ type: 'paste' })}>
+            貼り付けで追加
+          </button>
+          <button type="button" className="btn" onClick={() => setMode({ type: 'lunch' })}>
+            昼に使った
+          </button>
+          <button type="button" className="btn" disabled={rows.length === 0} onClick={() => setTidy(new Set())}>
+            在庫を整理
+          </button>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="empty">在庫がありません。「＋ 追加」から登録してください。</div>
       ) : (
         <ul className="list">
-          {rows.map(({ stock, food }) => (
-            <li key={stock.foodId}>
-              <button type="button" className="list-item" onClick={() => setMode({ type: 'edit', food, stock })}>
+          {rows.map(({ stock, food, past }) => {
+            const body = (
+              <>
                 <span className="group-dot" data-group={food.foodGroup ?? ''} aria-hidden="true" />
                 <span className="list-main">
                   <span className="list-title">{food.name}</span>
-                  <div className="list-sub">追加日 {formatShortDate(stock.addedDate)}</div>
+                  <div className="list-sub">
+                    追加日 {formatShortDate(stock.addedDate)}
+                    {past && <span className="tag" style={{ marginLeft: 6 }}>⚠ 目安を過ぎています</span>}
+                  </div>
                 </span>
                 <span className="list-end">{formatAmount(stock.amount, food.unit)}</span>
-              </button>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={stock.foodId}>
+                {tidy ? (
+                  // 整理中は、行のどこをタップしても選べる(量の編集は開かない)
+                  <label className="list-item check-row">
+                    <input type="checkbox" checked={tidy.has(food.id)} onChange={() => toggle(food.id)} />
+                    {body}
+                  </label>
+                ) : (
+                  <button type="button" className="list-item" onClick={() => setMode({ type: 'edit', food, stock })}>
+                    {body}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

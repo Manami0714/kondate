@@ -278,7 +278,7 @@ function parseStockMove(v: unknown, p: string): StockMove {
     at: str(o, 'at', p),
     foodId: str(o, 'foodId', p),
     delta: num(o, 'delta', p),
-    reason: oneOf(o, 'reason', ['購入', '夕飯', '昼食', '手直し', 'キャンセルで戻す'] as const, p),
+    reason: oneOf(o, 'reason', ['購入', '夕飯', '昼食', '手直し', 'キャンセルで戻す', '整理で削除'] as const, p),
     mealSetId: strOrNull(o, 'mealSetId', p),
   };
 }
