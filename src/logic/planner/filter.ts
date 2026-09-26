@@ -3,16 +3,33 @@
 import type { Feedback, Food, Member, PlanConditions, Recipe } from '../../db/types';
 import { parseComboValue } from '../feedback/target';
 
-/** レシピがその日のメンバーの誰かのアレルギーに当てはまるか(食材そのもの+含まれるアレルギー物質) */
-export function hitsAllergy(recipe: Recipe, members: readonly Member[], foodsById: ReadonlyMap<string, Food>): boolean {
-  return recipe.ingredients.some((ing) => {
-    const food = foodsById.get(ing.foodId);
-    return members.some(
-      (m) =>
-        m.allergyFoodIds.includes(ing.foodId) ||
-        (food !== undefined && food.allergens.some((a) => m.allergyAllergens.includes(a))),
-    );
+/** アレルギーに当てはまったメンバーと、当てはまった食材名・アレルギー物質 */
+export interface AllergyHit {
+  member: Member;
+  items: string[];
+}
+
+/** レシピが当てはまる、その日のメンバーのアレルギー(食材そのもの+含まれるアレルギー物質) */
+export function allergyHits(recipe: Recipe, members: readonly Member[], foodsById: ReadonlyMap<string, Food>): AllergyHit[] {
+  return members.flatMap((m) => {
+    const items = new Set<string>();
+    for (const ing of recipe.ingredients) {
+      const food = foodsById.get(ing.foodId);
+      if (m.allergyFoodIds.includes(ing.foodId)) items.add(food?.name ?? '(辞書にない食材)');
+      for (const a of food?.allergens ?? []) if (m.allergyAllergens.includes(a)) items.add(a);
+    }
+    return items.size > 0 ? [{ member: m, items: [...items] }] : [];
   });
+}
+
+/** レシピがその日のメンバーの誰かのアレルギーに当てはまるか */
+export function hitsAllergy(recipe: Recipe, members: readonly Member[], foodsById: ReadonlyMap<string, Food>): boolean {
+  return allergyHits(recipe, members, foodsById).length > 0;
+}
+
+/** 当てはまる「食後の嫌い」の評価 */
+export function afterMealDislikes(recipe: Recipe, feedbacks: readonly Feedback[]): Feedback[] {
+  return feedbacks.filter((f) => f.kind === '食後の嫌い' && feedbackMatches(f, recipe));
 }
 
 /**
@@ -38,7 +55,7 @@ export function feedbackMatches(f: Feedback, recipe: Recipe): boolean {
 
 /** 「食後の嫌い」に当てはまるか */
 export function hitsAfterMealDislike(recipe: Recipe, feedbacks: readonly Feedback[]): boolean {
-  return feedbacks.some((f) => f.kind === '食後の嫌い' && feedbackMatches(f, recipe));
+  return afterMealDislikes(recipe, feedbacks).length > 0;
 }
 
 /** 選んだ時間・難易度の条件の中か */

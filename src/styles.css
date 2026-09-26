@@ -533,6 +533,13 @@ button.list-item {
   border-top: 1px solid var(--line);
 }
 
+/* 料理ごとのボタン(入れ替え・選ぶ・指定を外す)を縦に並べる */
+.dish-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .dish-course {
   font-size: 12px;
   color: var(--text-sub);

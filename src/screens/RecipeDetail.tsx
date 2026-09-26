@@ -12,10 +12,12 @@ interface Props {
   byId: ReadonlyMap<string, Food>;
   /** 人数に合わせた量で見せるとき:その量と、人数の説明(例:「この日の合計:2.27人分(A 1倍・B 1.27倍)」) */
   scaled?: { ingredients: RecipeIngredient[]; label: string };
+  /** 上に出す注意(献立の料理が、アレルギー・食後の嫌いに当てはまるとき) */
+  warnings?: readonly string[];
 }
 
 /** レシピの中身を見る */
-export function RecipeDetail({ recipe, byId, scaled }: Props) {
+export function RecipeDetail({ recipe, byId, scaled, warnings = [] }: Props) {
   const ingredients = scaled?.ingredients ?? recipe.ingredients;
   const main = ingredients.filter((i) => byId.get(i.foodId)?.kind !== '調味料');
   const seasonings = ingredients.filter((i) => byId.get(i.foodId)?.kind === '調味料');
@@ -40,6 +42,11 @@ export function RecipeDetail({ recipe, byId, scaled }: Props) {
 
   return (
     <div className="form">
+      {warnings.map((text) => (
+        <div key={text} className="note note-warn">
+          {text}
+        </div>
+      ))}
       <RecipeActions recipe={recipe} />
       <div className="card">
         <div>

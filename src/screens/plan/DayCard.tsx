@@ -15,11 +15,15 @@ interface Props {
   onOpenDish: (dish: DishDetail) => void;
   /** 料理ごとのボタン(入れ替えなど) */
   dishAction?: (dish: DishDetail, index: number) => ReactNode;
+  /** 指定した料理か(「指定」の印をつける) */
+  isFixed?: (dish: DishDetail, index: number) => boolean;
+  /** アレルギー・食後の嫌いのほかに出す、料理ごとの注意(指定した料理の時間・主な材料のかぶりなど) */
+  dishNotes?: (dish: DishDetail, index: number) => string[];
   children?: ReactNode;
 }
 
 /** 1日分の献立:日付・メンバー・注意書き・3品・栄養バランス */
-export function DayCard({ day, status, headExtra, onOpenDish, dishAction, children }: Props) {
+export function DayCard({ day, status, headExtra, onOpenDish, dishAction, isFixed, dishNotes, children }: Props) {
   const { groups } = day.balance;
   return (
     <section className="day-card" data-status={status}>
@@ -43,12 +47,23 @@ export function DayCard({ day, status, headExtra, onOpenDish, dishAction, childr
             <span className="dish-course">{dish.recipe.course}</span>
             <button type="button" className="dish-name" onClick={() => onOpenDish(dish)}>
               {dish.recipe.name}
+              {isFixed?.(dish, i) && (
+                <span className="tag" style={{ marginLeft: 6 }}>
+                  指定
+                </span>
+              )}
               <div className="list-sub">
                 {dish.recipe.minutes}分・{DIFFICULTY_LABELS[dish.recipe.difficulty]}
               </div>
             </button>
-            {dishAction?.(dish, i)}
+            {dishAction && <div className="dish-actions">{dishAction(dish, i)}</div>}
           </div>
+          {/* アレルギー・食後の嫌いは、確定したあとも出し続ける */}
+          {[...dish.safetyWarnings, ...(dishNotes?.(dish, i) ?? [])].map((text) => (
+            <div key={text} className="note note-warn">
+              {text}
+            </div>
+          ))}
           {dish.uncertainFoods.length > 0 && (
             <div className="note note-warn">
               {UNCERTAIN_FOOD_NOTE}({dish.uncertainFoods.join('、')})

@@ -1,6 +1,7 @@
 // 3日分の献立を組む(純粋関数)
 // 1日目から主菜→副菜→汁物の順に、条件を満たす中で点数+ランダムの高いものを選ぶ。
 // これを何通りも作り、合計点(赤緑黄・使い切り・上限超えを含む)が最も高いものを返す
+// 指定した料理(request.fixed)は、その枠にそのまま入れ、残りの品を選ぶ
 import { PLAN_EXPLORE_TOP, PLAN_TRIALS, SCORE } from '../../config/scoring';
 import type { Recipe } from '../../db/types';
 import { scaleIngredients } from '../portion';
@@ -65,11 +66,19 @@ function buildDay(
   const shopFoods = new Set<string>();
   const ids: Partial<Dishes> = {};
   let score = 0;
+  // 指定した料理の主な材料は最初から使ったことにして、残りの品とかぶらないようにする
+  for (const r of Object.values(day.fixed)) for (const id of mainFoodIds(r, data.foodsById)) usedMains.add(id);
 
   for (const slot of COURSE_SLOTS) {
     const ctx: DayContext = { date: day.date, members: day.members, forMember: day.forMember, stock, history };
-    const options = day.candidates[slot.course]
-      .filter((r) => !usedRecipeIds.has(r.id) && !mainFoodIds(r, data.foodsById).some((id) => usedMains.has(id)))
+    const fixed = day.fixed[slot.course];
+    // 指定した枠は、そのレシピだけを候補にする(必ず外す条件・かぶりは見ない)
+    const pool = fixed
+      ? [fixed]
+      : day.candidates[slot.course].filter(
+          (r) => !usedRecipeIds.has(r.id) && !mainFoodIds(r, data.foodsById).some((id) => usedMains.has(id)),
+        );
+    const options = pool
       .map((r) => {
         const ingredients = scaleIngredients(r, day.total);
         const use = dishUse(stock, ingredients, data.pantryIds);
@@ -108,7 +117,9 @@ function buildTrial(
 ): Trial | null {
   const initial = toSimStock(data.stocks);
   const limit = data.household.shoppingLimitPerMeal;
-  let state: DayState = { stock: initial, history: [...data.history], usedRecipeIds: new Set() };
+  // 指定した料理は、アプリが選ぶ品には使わない(同じ献立セットの中で同じレシピは出さない)
+  const fixedIds = prepared.flatMap((d) => Object.values(d.fixed).map((r) => r.id));
+  let state: DayState = { stock: initial, history: [...data.history], usedRecipeIds: new Set(fixedIds) };
   let total = 0;
   const days: PlannedDay[] = [];
 

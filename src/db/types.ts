@@ -158,6 +158,13 @@ export interface PlanConditions {
   forMemberId: string | null;
 }
 
+/** 料理の指定:何日目(0始まり)のどの区分に、どのレシピを入れるか */
+export interface FixedDish {
+  dayIndex: number;
+  course: Course;
+  recipeId: string;
+}
+
 /** ゲストの滞在。日付で持つので、献立セットをまたいでも引き継げる */
 export interface GuestStay {
   memberId: string;
@@ -281,4 +288,6 @@ export interface PlanDraft {
   days: DraftDay[];
   /** 枠ごとに、入れ替えですでに見せた品 */
   shown: Record<string, string[]>;
+  /** 料理の指定(この機能より前の下書きにはないので、読むときは ?? [] にする) */
+  fixed?: FixedDish[];
 }

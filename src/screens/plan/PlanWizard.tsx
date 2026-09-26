@@ -4,19 +4,22 @@ import { TIME_PRESETS } from '../../config/scoring';
 import { db } from '../../db/db';
 import { deleteDraft, saveDraft } from '../../db/draftRepo';
 import { confirmPlanToDb } from '../../db/mealSetRepo';
-import type { DateString, GuestStay, PlanDraft } from '../../db/types';
+import type { DateString, FixedDish, GuestStay, PlanDraft } from '../../db/types';
 import type { PlannerSource } from '../../hooks/usePlannerData';
 import { toDateTimeString } from '../../logic/date';
 import { randomId } from '../../logic/id';
 import { buildDays, carryOverGuests, defaultStartDate, overlapsExisting } from '../../logic/planner/days';
+import { fixedRecipeId, needsConfirm, removeFixed, setFixed, warningsForSlot } from '../../logic/planner/fixed';
+import { pinDish } from '../../logic/planner/pin';
 import { makePlan } from '../../logic/planner/plan';
 import { summarizePlan, type DishDetail } from '../../logic/planner/summary';
 import { swapDish } from '../../logic/planner/swap';
-import type { Dishes, PlannedDay, PlanRequest } from '../../logic/planner/types';
+import { COURSE_SLOTS, type Dishes, type PlannedDay, type PlanRequest } from '../../logic/planner/types';
 import { defaultRng } from '../../logic/random';
 import { RecipeDetail } from '../RecipeDetail';
 import { ConditionForm, type ConditionState } from './ConditionForm';
 import { ProposalView } from './ProposalView';
+import { RecipePickerSheet } from './RecipePickerSheet';
 
 interface Props {
   src: PlannerSource;
@@ -30,11 +33,12 @@ interface Props {
 export function PlanWizard({ src, today, draft, onDone }: Props) {
   const [cond, setCond] = useState<ConditionState>(() =>
     draft
-      ? { startDate: draft.startDate, conditions: draft.conditions, addedGuests: draft.addedGuests }
+      ? { startDate: draft.startDate, conditions: draft.conditions, addedGuests: draft.addedGuests, fixed: draft.fixed ?? [] }
       : {
           startDate: defaultStartDate(src.mealSets, today),
           conditions: { preset: 'ふつう', ...TIME_PRESETS['ふつう'], forMemberId: null },
           addedGuests: [],
+          fixed: [],
         },
   );
   const [plan, setPlan] = useState<PlannedDay[] | null>(() => draft?.days ?? null);
@@ -45,17 +49,24 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [opened, setOpened] = useState<{ dish: DishDetail; label: string } | null>(null);
+  /** 提案の画面で、料理を選んでいる枠 */
+  const [picking, setPicking] = useState<{ dayIndex: number; key: keyof Dishes } | null>(null);
 
   const guests = [...carryOverGuests(src.mealSets, cond.startDate), ...cond.addedGuests];
+  const conditionDays = buildDays(cond.startDate, src.members, guests);
   const summary = useMemo(() => (plan ? summarizePlan(plan, src.data).days : []), [plan, src.data]);
-  // 提案のときの日付・メンバーと条件(入れ替えに使う)
+  // 提案のときの日付・メンバーと条件・料理の指定(入れ替えに使う)
   const request = useMemo<PlanRequest | null>(
-    () => (plan ? { days: plan.map((d) => ({ date: d.date, memberIds: d.memberIds })), conditions: cond.conditions } : null),
-    [plan, cond.conditions],
+    () =>
+      plan
+        ? { days: plan.map((d) => ({ date: d.date, memberIds: d.memberIds })), conditions: cond.conditions, fixed: cond.fixed }
+        : null,
+    [plan, cond.conditions, cond.fixed],
   );
+  const courseOf = (key: keyof Dishes) => COURSE_SLOTS.find((s) => s.key === key)?.course ?? '主菜';
 
   /** 提案を下書きとして保存する(タブの切り替えやアプリを閉じても消えないように) */
-  const keep = (days: PlannedDay[], nextShown: Record<string, string[]>, stays: GuestStay[]) => {
+  const keep = (days: PlannedDay[], nextShown: Record<string, string[]>, stays: GuestStay[], fixed: FixedDish[] = cond.fixed) => {
     setPlan(days);
     setShown(nextShown);
     setProposalGuests(stays);
@@ -67,7 +78,30 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
       guests: stays,
       days,
       shown: nextShown,
+      fixed,
     });
+  };
+
+  /** 提案の画面で、枠に料理を指定する(かぶる品だけ選び直す) */
+  const pin = (dayIndex: number, key: keyof Dishes, recipeId: string) => {
+    if (!request || !plan) return;
+    const fixed = setFixed(cond.fixed, { dayIndex, course: courseOf(key), recipeId });
+    const result = pinDish({ ...request, fixed }, src.data, plan, dayIndex, key);
+    if (!result.ok) {
+      setErrors([result.error]);
+      return;
+    }
+    setErrors([]);
+    setCond({ ...cond, fixed });
+    keep(result.days, shown, proposalGuests, fixed);
+  };
+
+  /** 指定を外す。料理はそのまま残り、アプリが選んだ品の扱いに戻る */
+  const unfix = (dayIndex: number, key: keyof Dishes) => {
+    if (!plan) return;
+    const fixed = removeFixed(cond.fixed, dayIndex, courseOf(key));
+    setCond({ ...cond, fixed });
+    keep(plan, shown, proposalGuests, fixed);
   };
 
   const propose = () => {
@@ -75,7 +109,7 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
       setErrors(['この日付にはすでに献立があります。開始日を変えてください']);
       return;
     }
-    const req: PlanRequest = { days: buildDays(cond.startDate, src.members, guests), conditions: cond.conditions };
+    const req: PlanRequest = { days: conditionDays, conditions: cond.conditions, fixed: cond.fixed };
     const result = makePlan(req, src.data, defaultRng);
     if (!result.ok) {
       setErrors([result.error]);
@@ -139,8 +173,19 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
           shoppingLimit={src.data.household.shoppingLimitPerMeal}
           errors={errors}
           busy={busy}
+          isFixed={(dayIndex, key) => fixedRecipeId(cond.fixed, dayIndex, courseOf(key)) !== null}
+          fixedNotes={(dayIndex, dish) =>
+            fixedRecipeId(cond.fixed, dayIndex, dish.recipe.course) === dish.recipe.id
+              ? warningsForSlot(dish.recipe, dayIndex, plan[dayIndex]?.memberIds ?? [], cond.fixed, cond.conditions, src.data)
+                  // アレルギー・食後の嫌いは、どの料理にも summarizePlan の注意で出ている
+                  .filter((w) => !needsConfirm([w]))
+                  .map((w) => w.text)
+              : []
+          }
           onOpenDish={(dish, label) => setOpened({ dish, label })}
           onSwap={swap}
+          onPick={(dayIndex, key) => setPicking({ dayIndex, key })}
+          onUnfix={unfix}
           onRetry={propose}
           onBack={() => {
             setPlan(null);
@@ -155,8 +200,26 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
           onChange={setCond}
           members={src.members}
           mealSets={src.mealSets}
+          days={conditionDays}
+          data={src.data}
           errors={errors}
           onSubmit={propose}
+        />
+      )}
+
+      {picking && plan && (
+        <RecipePickerSheet
+          title={`${picking.dayIndex + 1}日目の${courseOf(picking.key)}を選ぶ`}
+          course={courseOf(picking.key)}
+          recipes={src.data.recipes}
+          warningsFor={(r) =>
+            warningsForSlot(r, picking.dayIndex, plan[picking.dayIndex]?.memberIds ?? [], cond.fixed, cond.conditions, src.data)
+          }
+          onPick={(r) => {
+            pin(picking.dayIndex, picking.key, r.id);
+            setPicking(null);
+          }}
+          onClose={() => setPicking(null)}
         />
       )}
 
@@ -166,6 +229,7 @@ export function PlanWizard({ src, today, draft, onDone }: Props) {
             recipe={opened.dish.recipe}
             byId={src.foodsById}
             scaled={{ ingredients: opened.dish.ingredients, label: opened.label }}
+            warnings={opened.dish.safetyWarnings}
           />
         </Sheet>
       )}

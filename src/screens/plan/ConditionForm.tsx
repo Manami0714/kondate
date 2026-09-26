@@ -2,16 +2,20 @@ import { useState } from 'react';
 import { SingleChoice } from '../../components/Choice';
 import { ErrorList, Field } from '../../components/Field';
 import { TIME_PRESETS } from '../../config/scoring';
-import type { DateString, Difficulty, GuestStay, MealSet, Member, PlanConditions, TimePreset } from '../../db/types';
+import type { DateString, Difficulty, FixedDish, GuestStay, MealSet, Member, PlanConditions, TimePreset } from '../../db/types';
 import { formatShortDate } from '../../logic/date';
 import { DIFFICULTY_LABELS } from '../../logic/format';
 import { carryOverGuests, guestStay } from '../../logic/planner/days';
+import type { DayInput, PlannerData } from '../../logic/planner/types';
+import { FixedDishSection } from './FixedDishSection';
 
 export interface ConditionState {
   startDate: DateString;
   conditions: PlanConditions;
   /** この画面で追加したゲスト(前のセットからの引き継ぎは含まない) */
   addedGuests: GuestStay[];
+  /** 料理の指定 */
+  fixed: FixedDish[];
 }
 
 interface Props {
@@ -19,6 +23,9 @@ interface Props {
   onChange: (next: ConditionState) => void;
   members: readonly Member[];
   mealSets: readonly MealSet[];
+  /** 日ごとのメンバー(ゲストを含む)。料理の指定の注意に使う */
+  days: readonly DayInput[];
+  data: PlannerData;
   errors: string[];
   onSubmit: () => void;
 }
@@ -35,8 +42,8 @@ type MinuteOption = (typeof MINUTE_OPTIONS)[number];
 
 const NOBODY = 'だれでも';
 
-/** 条件を選ぶ:開始日・らくらく/ふつう/しっかり・詳細設定・誰向け・ゲスト */
-export function ConditionForm({ value, onChange, members, mealSets, errors, onSubmit }: Props) {
+/** 条件を選ぶ:開始日・らくらく/ふつう/しっかり・詳細設定・誰向け・ゲスト・料理の指定 */
+export function ConditionForm({ value, onChange, members, mealSets, days, data, errors, onSubmit }: Props) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [guestDraft, setGuestDraft] = useState<{ memberId: string | null; fromDay: number; days: number }>({
     memberId: null,
@@ -163,6 +170,14 @@ export function ConditionForm({ value, onChange, members, mealSets, errors, onSu
           </button>
         </div>
       )}
+
+      <FixedDishSection
+        fixed={value.fixed}
+        onChange={(fixed) => onChange({ ...value, fixed })}
+        days={days}
+        conditions={conditions}
+        data={data}
+      />
 
       <ErrorList errors={errors} />
       <button type="button" className="btn btn-primary btn-block" onClick={onSubmit}>

@@ -3,6 +3,7 @@ import type {
   Course,
   DateString,
   Feedback,
+  FixedDish,
   Food,
   HouseholdPrefs,
   Member,
@@ -39,6 +40,8 @@ export interface DayInput {
 export interface PlanRequest {
   days: readonly DayInput[];
   conditions: PlanConditions;
+  /** 料理の指定。指定した枠はそのレシピに固定し、残りの品を選ぶ(なければ指定なし) */
+  fixed?: readonly FixedDish[];
 }
 
 /** 1日の3品 */

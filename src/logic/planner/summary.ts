@@ -4,6 +4,7 @@ import type { Member, Recipe, RecipeIngredient } from '../../db/types';
 import { roundAmount } from '../stock';
 import { totalPortion, scaleIngredients } from '../portion';
 import { dayHasAllergy, uncertainFoodNames } from './allergyNotes';
+import { safetyWarnings } from './fixed';
 import { mealBalance, type MealBalance } from './balance';
 import { applyUse, dishUse, toSimStock, type DishUse, type SimStock } from './simulate';
 import { COURSE_SLOTS, type DayInput, type Dishes, type PlannerData } from './types';
@@ -15,6 +16,8 @@ export interface DishDetail {
   use: DishUse;
   /** アレルギーのある人がいる日に、注意を出す「要確認」の食材名 */
   uncertainFoods: string[];
+  /** アレルギー・食後の嫌いに当てはまるときの注意(指定した料理で出る)。確定したあとも表示のたびに計算する */
+  safetyWarnings: string[];
 }
 
 export interface DaySummary {
@@ -55,7 +58,13 @@ export function summarizePlan(days: readonly Day[], data: PlannerData): PlanSumm
       const use = dishUse(stock, ingredients, data.pantryIds);
       stock = applyUse(stock, use.used);
       for (const [foodId, amount] of use.shortage) shopping.set(foodId, roundAmount((shopping.get(foodId) ?? 0) + amount));
-      dishes.push({ recipe, ingredients, use, uncertainFoods: uncertainFoodNames(recipe, members, data.foodsById) });
+      dishes.push({
+        recipe,
+        ingredients,
+        use,
+        uncertainFoods: uncertainFoodNames(recipe, members, data.foodsById),
+        safetyWarnings: safetyWarnings(recipe, members, data.feedbacks, data.foodsById, recipesById).map((w) => w.text),
+      });
     }
     result.push({
       date: day.date,

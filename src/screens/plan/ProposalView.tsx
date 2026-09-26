@@ -13,15 +13,38 @@ interface Props {
   shoppingLimit: number;
   errors: string[];
   busy: boolean;
+  /** その枠に料理を指定しているか */
+  isFixed: (dayIndex: number, key: keyof Dishes) => boolean;
+  /** 指定した料理の、アレルギー・食後の嫌いのほかの注意(時間・主な材料のかぶり) */
+  fixedNotes: (dayIndex: number, dish: DishDetail) => string[];
   onOpenDish: (dish: DishDetail, label: string) => void;
   onSwap: (dayIndex: number, key: keyof Dishes) => void;
+  /** 料理を選んで、その枠に指定する */
+  onPick: (dayIndex: number, key: keyof Dishes) => void;
+  onUnfix: (dayIndex: number, key: keyof Dishes) => void;
   onRetry: () => void;
   onBack: () => void;
   onConfirm: () => void;
 }
 
-/** 3日分の提案:1品ずつ入れ替えられる */
-export function ProposalView({ plan, summary, foodsById, shoppingLimit, errors, busy, onOpenDish, onSwap, onRetry, onBack, onConfirm }: Props) {
+/** 3日分の提案:1品ずつ入れ替え・料理の指定ができる */
+export function ProposalView({
+  plan,
+  summary,
+  foodsById,
+  shoppingLimit,
+  errors,
+  busy,
+  isFixed,
+  fixedNotes,
+  onOpenDish,
+  onSwap,
+  onPick,
+  onUnfix,
+  onRetry,
+  onBack,
+  onConfirm,
+}: Props) {
   const shoppingText = (day: DaySummary) =>
     [...day.shopping]
       .map(([foodId, amount]) => {
@@ -29,6 +52,7 @@ export function ProposalView({ plan, summary, foodsById, shoppingLimit, errors, 
         return food ? `${food.name} ${formatApproxAmount(amount, food.unit)}` : foodId;
       })
       .join('、');
+  const keyOf = (dish: DishDetail) => COURSE_SLOTS.find((s) => s.course === dish.recipe.course)?.key;
 
   return (
     <div className="form" style={{ gap: 12 }}>
@@ -38,14 +62,30 @@ export function ProposalView({ plan, summary, foodsById, shoppingLimit, errors, 
           day={day}
           headExtra={<span className="muted">買い足し {day.shopping.size}品</span>}
           onOpenDish={(dish) => onOpenDish(dish, formatDayTotal(day.members))}
+          isFixed={(dish) => {
+            const key = keyOf(dish);
+            return key !== undefined && isFixed(dayIndex, key);
+          }}
+          dishNotes={(dish) => fixedNotes(dayIndex, dish)}
           dishAction={(dish) => {
-            const slot = COURSE_SLOTS.find((s) => s.course === dish.recipe.course);
+            const key = keyOf(dish);
+            if (!key) return null;
+            if (isFixed(dayIndex, key)) {
+              return (
+                <button type="button" className="btn btn-small" onClick={() => onUnfix(dayIndex, key)}>
+                  指定を外す
+                </button>
+              );
+            }
             return (
-              slot && (
-                <button type="button" className="btn btn-small" onClick={() => onSwap(dayIndex, slot.key)}>
+              <>
+                <button type="button" className="btn btn-small" onClick={() => onSwap(dayIndex, key)}>
                   入れ替え
                 </button>
-              )
+                <button type="button" className="btn btn-small" onClick={() => onPick(dayIndex, key)}>
+                  選ぶ
+                </button>
+              </>
             );
           }}
         >

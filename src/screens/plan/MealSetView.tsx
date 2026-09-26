@@ -81,6 +81,7 @@ export function MealSetView({ set, src, today }: Props) {
             recipe={opened.dish.recipe}
             byId={src.foodsById}
             scaled={{ ingredients: opened.dish.ingredients, label: opened.label }}
+            warnings={opened.dish.safetyWarnings}
           />
         </Sheet>
       )}
