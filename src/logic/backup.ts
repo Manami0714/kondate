@@ -6,6 +6,7 @@ import {
   TABLE_NAMES,
   type AllData,
   type Feedback,
+  type AltUnit,
   type Food,
   type Frequency,
   type HouseholdPrefs,
@@ -21,7 +22,7 @@ import {
 } from '../db/types';
 import { toDateTimeString } from './date';
 import { parseComboValue } from './feedback/target';
-import { upgradeBackupDataV1, upgradeBackupDataV2, upgradeBackupDataV3 } from './migrate';
+import { upgradeBackupDataV1, upgradeBackupDataV2, upgradeBackupDataV3, upgradeBackupDataV4 } from './migrate';
 import {
   ValidationError,
   arr,
@@ -92,6 +93,8 @@ export function parseBackup(text: string): ParseResult {
     if (version < 3) upgradeBackupDataV2(d);
     // 版3までのファイルの食材には、1単位あたりの重さがない
     if (version < 4) upgradeBackupDataV3(d);
+    // 版4までのファイルの食材には、ほかの数え方がない(重さの目安と干ししいたけも足す)
+    if (version < 5) upgradeBackupDataV4(d);
     const data: AllData = {
       foods: arr(d, 'foods', 'data').map((v, i) => parseFood(v, `食材辞書[${i}]`)),
       stocks: arr(d, 'stocks', 'data').map((v, i) => parseStock(v, `在庫[${i}]`)),
@@ -136,7 +139,13 @@ function parseFood(v: unknown, p: string): Food {
     allergens: oneOfArr(o, 'allergens', ALLERGENS, p),
     allergenUncertain: bool(o, 'allergenUncertain', p),
     gramsPerUnit: numOrNull(o, 'gramsPerUnit', p),
+    altUnits: arr(o, 'altUnits', p).map((a, i) => parseAltUnit(a, `${p}.altUnits[${i}]`)),
   };
+}
+
+function parseAltUnit(v: unknown, p: string): AltUnit {
+  const o = obj(v, p);
+  return { unit: str(o, 'unit', p), amount: num(o, 'amount', p) };
 }
 
 function parseStock(v: unknown, p: string): Stock {

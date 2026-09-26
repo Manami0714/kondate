@@ -33,7 +33,63 @@ function emptyDraft(name: string): FoodDraft {
     allergens: [],
     allergenUncertain: false,
     gramsPerUnit: '',
+    altUnits: [],
   };
+}
+
+interface AltUnitsProps {
+  /** 辞書の単位 */
+  unit: string;
+  rows: FoodDraft['altUnits'];
+  onChange: (rows: FoodDraft['altUnits']) => void;
+}
+
+/** ほかの数え方の入力(「1 枚 = 0.1 個」の行を足したり消したりする) */
+function AltUnitsField({ unit, rows, onChange }: AltUnitsProps) {
+  const unitLabel = unit || '単位';
+  const update = (index: number, patch: Partial<FoodDraft['altUnits'][number]>) =>
+    onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  return (
+    <Field
+      label="ほかの数え方"
+      hint={`レシピや口頭入力で、辞書と違う数え方(例:キャベツ 1枚=0.1個)で書かれた量を${unitLabel}に換算するのに使います`}
+    >
+      {rows.map((row, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>1</span>
+          <input
+            className="input"
+            style={{ width: 72 }}
+            aria-label={`ほかの数え方${i + 1}の単位`}
+            placeholder="枚"
+            value={row.unit}
+            onChange={(e) => update(i, { unit: e.target.value })}
+          />
+          <span>=</span>
+          <input
+            className="input"
+            style={{ width: 80 }}
+            inputMode="decimal"
+            aria-label={`ほかの数え方${i + 1}の量`}
+            value={row.amount}
+            onChange={(e) => update(i, { amount: e.target.value })}
+          />
+          <span>{unitLabel}</span>
+          <button
+            type="button"
+            className="btn btn-small btn-danger"
+            aria-label={`ほかの数え方${i + 1}を消す`}
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button type="button" className="btn btn-small" onClick={() => onChange([...rows, { unit: '', amount: '' }])}>
+        ＋ 数え方を足す
+      </button>
+    </Field>
+  );
 }
 
 /** 食材辞書の追加・編集フォーム */
@@ -125,6 +181,11 @@ export function FoodForm({ food = null, initialName = '', foods, onSaved, onCanc
           />
         </Field>
       )}
+      <AltUnitsField
+        unit={draft.unit.trim()}
+        rows={draft.altUnits}
+        onChange={(rows) => set('altUnits', rows)}
+      />
       {food && food.unit !== draft.unit.trim() && (
         <p className="field-hint">単位を変えても、在庫やレシピの量の数字はそのままです。必要なら量も直してください。</p>
       )}

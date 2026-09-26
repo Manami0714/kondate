@@ -93,14 +93,16 @@ describe('辞書の単位にする', () => {
 
   it('重さで書かれていて、辞書に1単位あたりの重さがあれば換算する(米 5kg → 33.3合)', () => {
     expect(toFoodAmount({ kind: 'number', value: 5000, unit: 'g' }, food('rice'), 0)).toEqual({ amount: 33.3, note: 'converted' });
+    // にんじん 500g(1本=150g)→ 3.3本
+    expect(toFoodAmount({ kind: 'number', value: 500, unit: 'g' }, food('carrot'), 0)).toEqual({ amount: 3.3, note: 'converted' });
     // 1単位あたりの重さがない食材は、今まで通りふつうの量
-    expect(toFoodAmount({ kind: 'number', value: 500, unit: 'g' }, food('carrot'), 0)).toEqual({ amount: 3, note: 'unit-mismatch' });
+    expect(toFoodAmount({ kind: 'number', value: 500, unit: 'g' }, { ...food('carrot'), gramsPerUnit: null }, 0)).toEqual({ amount: 3, note: 'unit-mismatch' });
   });
 
   it('量がない・単位が違うときはふつうの量(注意つき)', () => {
     expect(toFoodAmount(null, food('egg'), 0)).toEqual({ amount: 10, note: 'no-amount' });
-    // 人参 500g(辞書は本、ふつうの量3本)
-    expect(toFoodAmount({ kind: 'number', value: 500, unit: 'g' }, food('carrot'), 0)).toEqual({ amount: 3, note: 'unit-mismatch' });
+    // 人参 500g(辞書は本、ふつうの量3本。1単位あたりの重さがないとき)
+    expect(toFoodAmount({ kind: 'number', value: 500, unit: 'g' }, { ...food('carrot'), gramsPerUnit: null }, 0)).toEqual({ amount: 3, note: 'unit-mismatch' });
     // 豚こま 2パック(辞書は g、ふつうの量300g)
     expect(toFoodAmount({ kind: 'number', value: 2, unit: 'パック' }, food('pork_koma'), 0)).toEqual({ amount: 600, note: 'unit-mismatch' });
   });

@@ -28,7 +28,8 @@ describe('貼り付けの保存', () => {
   it('チェックの入った食材だけ在庫に足し、量が正しくなければエラー', () => {
     const item = itemOf('ごぼう 250g', INITIAL_FOODS);
     const ok = planPasteSave([row(item)], INITIAL_FOODS, [], now);
-    expect(ok.ok && ok.items).toEqual([{ foodId: 'burdock', amount: 1 }]);
+    // ごぼう 250g(1本=150g)→ 1.7本
+    expect(ok.ok && ok.items).toEqual([{ foodId: 'burdock', amount: 1.7 }]);
     const off = planPasteSave([row(item, { include: false })], INITIAL_FOODS, [], now);
     expect(off.ok && off.items).toEqual([]);
     expect(planPasteSave([row(item, { amountText: '0' })], INITIAL_FOODS, [], now).ok).toBe(false);

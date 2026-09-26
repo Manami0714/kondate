@@ -89,13 +89,13 @@ describe('ネットスーパー(架空の見本)', () => {
       // 「鶏モモ肉」は商品名の一部だけなので、自信がない(一度選べば次から読み取った)
       ['国産鶏モモ肉からあげ用(バラ凍結)', '自信がない', 'chicken_thigh', 500, null],
       ['産地直送豚肩ロース切りおとし', '読めなかった', null, 0, null],
-      ['やわらか肉詰めピーマン', '自信がない', 'green_pepper', 5, 'unit-mismatch'],
+      ['やわらか肉詰めピーマン', '自信がない', 'green_pepper', 5, 'converted'],
       ['白菜', '読み取った', 'chinese_cabbage', 0.25, null],
       ['大根', '読み取った', 'daikon', 0.5, null],
       // 辞書は本なので、g のときはふつうの量(3本)
-      ['にんじん', '読み取った', 'carrot', 3, 'unit-mismatch'],
+      ['にんじん', '読み取った', 'carrot', 3, 'converted'],
       // 辞書は袋なので、ふつうの量(1袋)×2点
-      ['えのき茸', '読み取った', 'enoki', 2, 'unit-mismatch'],
+      ['えのき茸', '読み取った', 'enoki', 4, 'converted'],
       // 12個180g のうち、辞書の単位(g)に合う方を使う
       ['まろやかプロセスチーズ', '自信がない', 'cheese', 180, null],
       ['ふんわりトイレットロール 12ロール', '読めなかった', null, 0, null],
@@ -127,14 +127,14 @@ describe('ネットスーパー(実物をテキスト認識でコピーした文
     expect(items.map((i) => [i.word, i.status, i.foodId, i.amount, i.note])).toEqual([
       ['までっこ鶏モモ肉唐揚用徳用(バラ凍結)', '自信がない', 'chicken_thigh', 620, null],
       ['ベビーチーズ', '自信がない', 'cheese', 216, null],
-      ['なめこ', '読み取った', 'nameko', 2, 'unit-mismatch'],
+      ['なめこ', '読み取った', 'nameko', 1.6, 'converted'],
       ['豚徳用小間切(ペアパック)', '読めなかった', null, 0, null],
       ['おさかなソーセージ', '自信がない', 'sausage', 4, null],
       ['おまかせ産直米(無洗米)', '自信がない', 'rice', 33.3, 'converted'],
       ['梨(あきづき)', '読めなかった', null, 0, null],
       ['徳用NZ産有機サンゴールドキウイ(特大パック)', '読めなかった', null, 0, null],
-      ['ごぼう', '読み取った', 'burdock', 1, 'unit-mismatch'],
-      ['えのき茸', '読み取った', 'enoki', 1, 'unit-mismatch'],
+      ['ごぼう', '読み取った', 'burdock', 1.7, 'converted'],
+      ['えのき茸', '読み取った', 'enoki', 2, 'converted'],
     ]);
   });
 });
@@ -223,5 +223,22 @@ describe('読まない言葉の決まり', () => {
     // 読まない言葉の中の食材らしい部分と同じ名前の商品は、ふつうに読まれる
     const items = parsePaste(['ごぼう', '1点 204円★'].join('\n'), INITIAL_FOODS, ignoredOf('ごぼうとにんじんの詰め合わせ箱')).items;
     expect(items.map((i) => [i.word, i.status])).toEqual([['ごぼう', '読み取った']]);
+  });
+});
+
+describe('ほかの数え方・1単位あたりの重さ', () => {
+  const itemOf = (name: string, count = 1) => parsePaste(`${name}\n${count}点 100円`, INITIAL_FOODS, []).items[0];
+
+  it('食材ごとのほかの数え方で換算する(豆腐1パック=1丁、キャベツ1/2玉=0.5個)', () => {
+    expect(itemOf('豆腐 1パック', 2)).toMatchObject({ foodId: 'tofu', amount: 2, note: 'alt-unit' });
+    expect(itemOf('キャベツ 1/2玉')).toMatchObject({ foodId: 'cabbage', amount: 0.5, note: 'alt-unit' });
+  });
+
+  it('重さで書かれていれば1単位あたりの重さで換算する(こんにゃく 250g=1枚)', () => {
+    expect(itemOf('こんにゃく 250g')).toMatchObject({ foodId: 'konnyaku', amount: 1, note: 'converted' });
+  });
+
+  it('干ししいたけは、しいたけではなく干ししいたけとして読む', () => {
+    expect(itemOf('干ししいたけ 10枚')).toMatchObject({ status: '読み取った', foodId: 'dried_shiitake', amount: 10, note: null });
   });
 });

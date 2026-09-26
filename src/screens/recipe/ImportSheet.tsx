@@ -10,6 +10,7 @@ import { saveImportedRecipeInDb } from '../../db/recipeRepo';
 import type { Course, Difficulty, Food, Recipe } from '../../db/types';
 import { DIFFICULTY_LABELS, amountToInput } from '../../logic/format';
 import { randomId } from '../../logic/id';
+import { canBeMain } from '../../logic/planner/mainFoods';
 import { readPastedText } from '../../logic/recipeImport/clipboard';
 import {
   findRecipeByUrl,
@@ -19,6 +20,7 @@ import {
 } from '../../logic/recipeImport/importSave';
 import { ingredientAmount, readIngredients } from '../../logic/recipeImport/matchIngredients';
 import type { ImportedPage, IngredientStatus } from '../../logic/recipeImport/types';
+import { DEFAULT_MINUTES, DEFAULT_SERVINGS } from '../../config/recipeImport';
 import { ImportIngredientRow, type ImportRow } from './ImportIngredientRow';
 
 interface Props {
@@ -34,7 +36,7 @@ interface Form extends ImportFormState {
 }
 
 const SECTIONS: { status: IngredientStatus; title: string; hint: string }[] = [
-  { status: '読み取った', title: '読み取った材料', hint: '量を確かめ、料理の中心になる材料(1〜2個)は「主」をタップします' },
+  { status: '読み取った', title: '読み取った材料', hint: '量を確かめてください。料理の中心になる材料は、上から1〜2個に「主」を付けてあります。違えばタップで直せます' },
   { status: '自信がない', title: '自信のない材料', hint: '食材を確かめてください。選んだ内容は次から自動で読めます' },
   { status: '読めなかった', title: '読めなかった材料', hint: '食材を選ぶと、材料名を別名として覚えます。辞書にない食材は、選ぶ画面で辞書に追加できます' },
 ];
@@ -55,7 +57,7 @@ export function ImportSheet({ foods, byId, onClose, onSaved }: Props) {
       return;
     }
     const items = readIngredients(result.page.ingredientLines, foods);
-    const state = initialFormState(result.page, items);
+    const state = initialFormState(result.page, items, byId);
     setPage(result.page);
     setForm({ ...state, rows: state.rows.map((r, i) => ({ ...r, note: items[i].note })) });
     setErrors([]);
@@ -74,7 +76,8 @@ export function ImportSheet({ foods, byId, onClose, onSaved }: Props) {
       note,
       confirmed: true,
       skip: false,
-      main: row.main && food.id === row.foodId,
+      // 主の印は残す(調味料・薬味に変えたときだけ外す)
+      main: row.main && canBeMain(food),
     });
   };
 
@@ -163,19 +166,21 @@ export function ImportSheet({ foods, byId, onClose, onSaved }: Props) {
           <SingleChoice<Course> options={['主菜', '副菜', '汁物']} value={form.course} onChange={(v) => set('course', v)} />
         </Field>
         <div className="row-2">
-          <Field label="基準の人数" hint={page.servings === null ? '読めなかったので入れてください' : undefined}>
+          <Field label="基準の人数">
             <div className="input-with-unit">
               <input className="input" inputMode="numeric" value={form.servings} onChange={(e) => set('servings', e.target.value)} />
               <span>人分</span>
             </div>
           </Field>
-          <Field label="調理時間" hint={page.minutes === null ? '読めなかったので入れてください' : undefined}>
+          <Field label="調理時間">
             <div className="input-with-unit">
               <input className="input" inputMode="numeric" value={form.minutes} onChange={(e) => set('minutes', e.target.value)} />
               <span>分</span>
             </div>
           </Field>
         </div>
+        {page.servings === null && <div className="note note-warn">人数が書かれていなかったので{DEFAULT_SERVINGS}人分にしました</div>}
+        {page.minutes === null && <div className="note note-warn">時間が書かれていなかったので{DEFAULT_MINUTES}分にしました</div>}
         <Field label="難易度" hint="はじめは調理時間から決めています">
           <SingleChoice<Difficulty>
             options={[1, 2, 3]}

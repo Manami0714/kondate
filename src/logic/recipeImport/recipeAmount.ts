@@ -6,8 +6,9 @@ import {
   VAGUE_AMOUNT_WORDS,
   VOLUME_ML,
 } from '../../config/recipeImport';
-import { COUNT_UNITS, GENERIC_COUNT_UNIT, HALF_RATIO } from '../../config/textInput';
+import { COUNT_UNITS, GENERIC_COUNT_UNIT, HALF_RATIO, LITTLE_RATIO } from '../../config/textInput';
 import type { Food } from '../../db/types';
+import { convertAltUnit } from '../altUnits';
 import { roundAmount } from '../stock';
 import { cleanText, toMatchForm } from '../textInput/normalize';
 import type { ImportAmountNote } from './types';
@@ -54,6 +55,11 @@ function splitParens(text: string): { outside: string; inside: string } {
   return { outside: text.replace(/[(（][^)）]*[)）]/g, ' '), inside };
 }
 
+// 数のすぐ後の、知らない単位らしい言葉(カタカナ・漢字1〜3文字)
+const UNKNOWN_UNIT = /^[ァ-ヶ一-龠]{1,3}/;
+// 数の後に来ても単位ではない言葉(「1強」「2程度」「3前後」「1位」)
+const NOT_UNIT = /^(強|弱|程|前後|位|クライ|ホド)/;
+
 function readPart(m: string): RecipeQuantity | null {
   const prefix = PREFIX_RE.exec(m);
   if (prefix) {
@@ -66,7 +72,10 @@ function readPart(m: string): RecipeQuantity | null {
   if (suffix) {
     const unitWord = suffix[3] ? SUFFIX_UNIT_WORDS.find((u) => u.word === suffix[3]) : undefined;
     const value = (toNumber(suffix[1]) + toNumber(suffix[2]) + (suffix[4] ? HALF_RATIO : 0)) * (unitWord?.factor ?? 1);
-    if (value > 0) return { kind: 'number', value: roundAmount(value), unit: unitWord?.unit ?? null };
+    // 知らない単位(「1/2節」の「節」)は、そのままの書き方を単位にする(辞書の単位と合わないので、( ) の中の量などを使う)
+    const unknown = unitWord ? null : UNKNOWN_UNIT.exec(m.slice(suffix.index + suffix[0].length));
+    const unit = unitWord?.unit ?? (unknown && !NOT_UNIT.test(unknown[0]) ? unknown[0] : null);
+    if (value > 0) return { kind: 'number', value: roundAmount(value), unit };
   }
   if (/半分/.test(m)) return { kind: 'number', value: HALF_RATIO, unit: null };
   const vague = VAGUE.find((v) => m.includes(v.word));
@@ -118,8 +127,10 @@ function fromMl(ml: number, food: Food): number | null {
 
 /**
  * 読み取った量を、辞書の単位での量にする。決められなければ amount は null(確認画面で入れてもらう)
- * - 量がない・少々・適量:かさの単位や g の材料は「小さじ何杯分」を換算した量(注意つき)。数える単位の材料は null
+ * - 量がない・少々・適量:かさの単位や g の材料は「小さじ何杯分」を換算した量(注意つき)。
+ *   数える単位の材料は、昼食の口頭入力の「少し」と同じ量(ふつうの量の1割。注意つき)
  * - 単位がない・辞書と同じ:そのまま。「個」はどの数える単位にも合わせる。「片」と「かけ」は同じ
+ * - 食材ごとのほかの数え方(キャベツ 1枚=0.1個)があれば、それで換算する(注意つき)
  * - 大さじ・小さじ・カップ・ml どうし:換算する。調味料の g とも 1ml≒1g で換算する(注意つき)
  * - g で書かれていて、辞書に1単位あたりの重さがある:換算する(注意つき)
  * - パック・袋・缶で辞書と違う:ふつうの量×数(注意つき)
@@ -135,12 +146,15 @@ export function toRecipeFoodAmount(
   });
   if (quantity === null || quantity.kind === 'vague') {
     const teaspoons = quantity?.teaspoons ?? VAGUE_AMOUNT_WORDS.find((v) => v.word === '適量')?.teaspoons ?? 1;
-    if (isCountUnit(food.unit)) return result(null, 'not-number');
+    if (isCountUnit(food.unit)) return result(food.usualAmount * LITTLE_RATIO, 'little');
     return result(fromMl(teaspoons * (VOLUME_ML['小さじ'] ?? 5), food), 'not-number');
   }
   const { value, unit } = quantity;
   if (unit === null || unit === food.unit) return result(value, null);
   if (unit === GENERIC_COUNT_UNIT && isCountUnit(food.unit)) return result(value, null);
+  // 食材ごとのほかの数え方(キャベツ 1枚=0.1個、鶏もも肉 1枚=250g)
+  const alt = convertAltUnit(food, value, unit);
+  if (alt !== null) return result(alt, 'converted');
   const ml = VOLUME_ML[unit];
   if (ml !== undefined) {
     const converted = fromMl(value * ml, food);

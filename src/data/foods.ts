@@ -1,7 +1,7 @@
 // 食材辞書の初期データ(開発時に新しく作ったもの)
 // アレルギー物質は「一般的に含まれることが多いもの」を入れている。実際の商品は原材料表示で確かめる
 import type { Allergen } from './allergens';
-import type { Food, FoodGroup } from '../db/types';
+import type { AltUnit, Food, FoodGroup } from '../db/types';
 
 /** 食材を作る */
 function food(
@@ -15,7 +15,7 @@ function food(
   allergens: Allergen[] = [],
   isCondiment = false,
 ): Food {
-  return { id, name, aliases, unit, usualAmount, kind: '食材', foodGroup, shelfLifeDays, isCondiment, allergens, allergenUncertain: false, gramsPerUnit: null };
+  return { id, name, aliases, unit, usualAmount, kind: '食材', foodGroup, shelfLifeDays, isCondiment, allergens, allergenUncertain: false, gramsPerUnit: null, altUnits: [] };
 }
 
 /** 調味料を作る(食品グループなし) */
@@ -28,7 +28,7 @@ function seasoning(
   shelfLifeDays = 365,
   allergens: Allergen[] = [],
 ): Food {
-  return { id, name, aliases, unit, usualAmount, kind: '調味料', foodGroup: null, shelfLifeDays, isCondiment: false, allergens, allergenUncertain: false, gramsPerUnit: null };
+  return { id, name, aliases, unit, usualAmount, kind: '調味料', foodGroup: null, shelfLifeDays, isCondiment: false, allergens, allergenUncertain: false, gramsPerUnit: null, altUnits: [] };
 }
 
 const FOOD_LIST: Food[] = [
@@ -108,6 +108,7 @@ const FOOD_LIST: Food[] = [
   food('konnyaku', 'こんにゃく', ['蒟蒻', 'コンニャク', 'ｺﾝﾆｬｸ'], '枚', 1, '緑', 30),
   // ── 緑:きのこ ──
   food('shiitake', 'しいたけ', ['椎茸', 'シイタケ', '生しいたけ', 'ｼｲﾀｹ'], '個', 6, '緑', 5),
+  food('dried_shiitake', '干ししいたけ', ['干し椎茸', '乾燥しいたけ', '干しシイタケ', 'ﾎｼｼｲﾀｹ'], '枚', 10, '緑', 180),
   food('shimeji', 'しめじ', ['ぶなしめじ', 'シメジ', 'ｼﾒｼﾞ'], 'パック', 1, '緑', 5),
   food('enoki', 'えのき', ['えのき茸', 'エノキ', 'ｴﾉｷ'], '袋', 1, '緑', 5),
   food('maitake', 'まいたけ', ['舞茸', 'マイタケ', 'ﾏｲﾀｹ'], 'パック', 1, '緑', 4),
@@ -164,13 +165,111 @@ const FOOD_LIST: Food[] = [
 const ALLERGEN_UNCERTAIN_IDS = new Set(['dashi', 'salad_oil', 'ketchup', 'kimchi']);
 
 /**
- * 1単位あたりの重さ(g)。重さで書かれた量を、辞書の単位に換算するのに使う。
- * 米:1合(180ml)の生の米は約150g
+ * 1単位あたりの重さ(g)。重さで書かれた量(「こんにゃく 80g」「米 5kg」)を、辞書の単位に換算するのに使う。
+ * 一般的なおおよその目安(商品や大きさで差がある)。米:1合(180ml)の生の米は約150g
  */
-const GRAMS_PER_UNIT: Readonly<Record<string, number>> = { rice: 150 };
+const GRAMS_PER_UNIT: Readonly<Record<string, number>> = {
+  rice: 150,
+  // 赤
+  ham: 10,
+  sausage: 20,
+  salmon: 80,
+  mackerel: 80,
+  yellowtail: 80,
+  cod: 80,
+  tuna_can: 70,
+  mackerel_can: 190,
+  chikuwa: 30,
+  kamaboko: 150,
+  egg: 60,
+  tofu: 300,
+  fried_tofu: 30,
+  atsuage: 150,
+  natto: 45,
+  // 緑
+  cabbage: 1000,
+  chinese_cabbage: 2000,
+  lettuce: 300,
+  onion: 200,
+  carrot: 150,
+  daikon: 1000,
+  green_pepper: 30,
+  bell_pepper: 150,
+  eggplant: 80,
+  cucumber: 100,
+  tomato: 150,
+  cherry_tomato: 15,
+  tomato_can: 400,
+  spinach: 200,
+  komatsuna: 250,
+  bok_choy: 100,
+  mizuna: 200,
+  broccoli: 250,
+  bean_sprouts: 200,
+  green_onion: 100,
+  scallion: 100,
+  nira: 100,
+  burdock: 150,
+  pumpkin: 1200,
+  okra: 10,
+  asparagus: 20,
+  ginger: 15,
+  garlic: 5,
+  ooba: 1,
+  konnyaku: 250,
+  shiitake: 15,
+  dried_shiitake: 3,
+  shimeji: 100,
+  enoki: 100,
+  maitake: 100,
+  nameko: 100,
+  eringi: 100,
+  nori: 3,
+  // 黄
+  udon: 200,
+  gyoza_skin: 6,
+  potato: 150,
+  sweet_potato: 250,
+  taro: 50,
+};
+
+/**
+ * ほかの数え方(1{unit} = amount 辞書の単位)。すべての食材で「枚=個」とはせず、食材ごとに決める
+ */
+const ALT_UNITS: Readonly<Record<string, AltUnit[]>> = {
+  shiitake: [{ unit: '枚', amount: 1 }],
+  cabbage: [
+    { unit: '枚', amount: 0.1 },
+    { unit: '玉', amount: 1 },
+  ],
+  lettuce: [
+    { unit: '枚', amount: 0.1 },
+    { unit: '玉', amount: 1 },
+  ],
+  chinese_cabbage: [
+    { unit: '枚', amount: 0.05 },
+    { unit: '株', amount: 1 },
+  ],
+  onion: [{ unit: '玉', amount: 1 }],
+  spinach: [{ unit: '株', amount: 0.2 }],
+  komatsuna: [{ unit: '株', amount: 0.2 }],
+  broccoli: [{ unit: '房', amount: 0.1 }],
+  daikon: [{ unit: 'cm', amount: 0.03 }],
+  green_onion: [{ unit: 'cm', amount: 0.03 }],
+  konnyaku: [{ unit: '丁', amount: 1 }],
+  tofu: [{ unit: 'パック', amount: 1 }],
+  chicken_thigh: [{ unit: '枚', amount: 250 }],
+  chicken_breast: [{ unit: '枚', amount: 250 }],
+  chicken_tender: [{ unit: '本', amount: 50 }],
+  chicken_wing: [{ unit: '本', amount: 60 }],
+  bacon: [{ unit: '枚', amount: 17 }],
+  shrimp: [{ unit: '尾', amount: 15 }],
+  squid: [{ unit: '杯', amount: 250 }],
+};
 
 export const INITIAL_FOODS: Food[] = FOOD_LIST.map((f) => ({
   ...f,
   allergenUncertain: ALLERGEN_UNCERTAIN_IDS.has(f.id),
   gramsPerUnit: GRAMS_PER_UNIT[f.id] ?? null,
+  altUnits: (ALT_UNITS[f.id] ?? []).map((a) => ({ ...a })),
 }));

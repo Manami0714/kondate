@@ -87,6 +87,48 @@ export const PAGE_TEXT = [
   STEP_TEXT,
 ].join('\n');
 
+/**
+ * 実際のページで見た書き方をまねた、ショートカットの出力(架空のレシピ)。
+ * クックパッドの形:人数・時間なし(recipeYield が空)、料理名の前後に記号、行の頭に ✿ ♡ ☆、「(又は…)」、全角の「ｇ」「～」
+ */
+export const COOKPAD_SHORTCUT_OUTPUT = JSON.stringify({
+  kondate: 1,
+  kind: 'recipe',
+  url: 'https://cookpad.example/jp/recipes/1',
+  name: '✿テスト用 鶏そぼろ丼✿',
+  recipeIngredient: ['鶏ひき肉(又は豚ひき肉) 150ｇ～200ｇ', '卵 2～3個', '✿しょうゆ 大2', '✿砂糖 大1', '♡塩 少々', '♡白ゴマ 適量', '☆酒 大1'],
+  totalTime: null,
+  cookTime: null,
+  prepTime: null,
+  recipeYield: [],
+});
+
+/** クラシルの形:「1 servings」、数える単位の材料に「適量」、お湯・氷水 */
+export const KURASHIRU_SHORTCUT_OUTPUT = JSON.stringify({
+  kondate: 1,
+  kind: 'recipe',
+  url: 'https://kurashiru.example/recipes/abc',
+  name: 'テスト用 のりとツナのうどん',
+  recipeIngredient: ['のり 適量', 'うどん 1玉', 'ツナ缶 1缶', 'めんつゆ 大さじ1', 'お湯 適量', '氷水 適量'],
+  totalTime: 'PT10M',
+  cookTime: 'PT10M',
+  prepTime: 'PT0M',
+  recipeYield: ['1 servings'],
+});
+
+/** デリッシュキッチンの形:料理名に「の作り方が動画でわかる!…」、時間が秒、「1/2節(100g)」 */
+export const DELISH_SHORTCUT_OUTPUT = JSON.stringify({
+  kondate: 1,
+  kind: 'recipe',
+  url: 'https://delish.example/recipes/9',
+  name: 'テスト用 根菜の煮物の作り方が動画でわかる!テスト用のレシピ',
+  recipeIngredient: ['鶏もも肉 150g', 'れんこん 1/2節(100g)', 'ごぼう 1/2本(90g)', 'しょうゆ 大さじ2'],
+  totalTime: 'PT3000S',
+  cookTime: 'PT3000S',
+  prepTime: 'PT0M',
+  recipeYield: ['4人分'],
+});
+
 /** 長い作り方の文章(材料の行より長い) */
 export const LONG_STEP_TEXT = 'テスト用の長い作り方の文章です。鍋に材料を入れて弱火でゆっくり煮て、最後に味を見て整えます';
 

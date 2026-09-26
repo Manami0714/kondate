@@ -7,4 +7,4 @@ export const APP_DESCRIPTION = '冷蔵庫の在庫から3日分の夕飯を提�
 export const BASE_PATH = '/kondate/';
 
 // 書き出しファイルの形式バージョン。データの形を変えたら上げる
-export const BACKUP_FORMAT_VERSION = 4;
+export const BACKUP_FORMAT_VERSION = 5;

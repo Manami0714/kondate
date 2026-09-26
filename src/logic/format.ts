@@ -1,4 +1,5 @@
 // 画面に出す文字の整形(純粋関数)
+import type { Food } from '../db/types';
 
 const FRACTIONS: [number, string][] = [
   [0.25, '1/4'],
@@ -51,4 +52,14 @@ export function roundForDisplay(amount: number, unit: string): number {
 /** 計算した量の表示。「1.13大さじ」→「1と1/4大さじ」、「11.34g」→「11g」 */
 export function formatApproxAmount(amount: number, unit: string): string {
   return formatAmount(roundForDisplay(amount, unit), unit);
+}
+
+/**
+ * 在庫の量の表示。辞書に1単位あたりの重さがある食材は、重さも添える(「2袋(約200g)」)。
+ * 重さで換算した袋や本の数が見た目と違っても、冷蔵庫の中身と比べやすくするため
+ */
+export function formatStockAmount(amount: number, food: Pick<Food, 'unit' | 'gramsPerUnit'>): string {
+  const base = formatAmount(amount, food.unit);
+  if (food.gramsPerUnit === null || food.gramsPerUnit <= 0 || DECIMAL_UNITS.has(food.unit)) return base;
+  return `${base}(約${Math.round(amount * food.gramsPerUnit)}g)`;
 }

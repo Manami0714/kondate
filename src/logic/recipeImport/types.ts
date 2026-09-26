@@ -18,8 +18,9 @@ export type IngredientStatus = '読み取った' | '自信がない' | '読め�
  * - not-number:量が数字でなかった(少々・適量など)、または量が書いていなかった
  * - converted:大さじ・小さじ・g などを辞書の単位に換算した
  * - unit-mismatch:単位が辞書と違い、換算できなかった
+ * - little:数える単位の材料で量が数字でなかった(適量など)ので、「少し」(ふつうの量の1割)にした
  */
-export type ImportAmountNote = 'not-number' | 'converted' | 'unit-mismatch';
+export type ImportAmountNote = 'not-number' | 'converted' | 'unit-mismatch' | 'little';
 
 /** 材料の1行を読んだ結果 */
 export interface ImportIngredient {
@@ -37,4 +38,6 @@ export interface ImportIngredient {
   /** 辞書の単位での量。決められなければ null(確認画面で入れてもらう) */
   amount: number | null;
   note: ImportAmountNote | null;
+  /** 量が数字でない(適量・お好みで・少々など、または書いていない)。添える程度の材料なので、主な材料の自動選択で飛ばす */
+  vague: boolean;
 }

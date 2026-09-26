@@ -7,6 +7,7 @@ import {
   missingSeeds,
   upgradeFoodV1,
   upgradeFoodV4,
+  upgradeFoodV5,
   upgradeHouseholdV1,
   upgradeMealSetV1,
   upgradeMemberV1,
@@ -84,6 +85,13 @@ export class KondateDB extends Dexie {
     // 版5:食材に1単位あたりの重さ(g)を足す(米は1合=150g)
     this.version(5).upgrade(async (tx) => {
       await tx.table('foods').toCollection().modify((o: Obj) => upgradeFoodV4(o));
+    });
+
+    // 版6:食材にほかの数え方を足し、1単位あたりの重さの目安を入れる(自分で入れた値は変えない)。干ししいたけを足す
+    this.version(6).upgrade(async (tx) => {
+      await tx.table('foods').toCollection().modify((o: Obj) => upgradeFoodV5(o));
+      const foodIds = new Set((await tx.table('foods').toCollection().primaryKeys()).map(String));
+      await tx.table('foods').bulkAdd(missingSeeds(foodIds, new Set()).foods);
     });
 
     // データベースを初めて作ったときだけ、初期データを入れる

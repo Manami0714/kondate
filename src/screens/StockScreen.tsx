@@ -9,7 +9,7 @@ import type { Food, Stock } from '../db/types';
 import { useFoods } from '../hooks/useFoods';
 import { formatShortDate, toDateString } from '../logic/date';
 import { parseAmount } from '../logic/forms';
-import { amountToInput, formatAmount } from '../logic/format';
+import { amountToInput, formatAmount, formatStockAmount } from '../logic/format';
 import { isPastShelfLife } from '../logic/stock';
 import { LunchSheet } from './stock/LunchSheet';
 import { PasteSheet } from './stock/PasteSheet';
@@ -119,7 +119,7 @@ export function StockScreen() {
                     {past && <span className="tag" style={{ marginLeft: 6 }}>⚠ 目安を過ぎています</span>}
                   </div>
                 </span>
-                <span className="list-end">{formatAmount(stock.amount, food.unit)}</span>
+                <span className="list-end">{formatStockAmount(stock.amount, food)}</span>
               </>
             );
             return (

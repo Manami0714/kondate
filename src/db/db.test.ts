@@ -166,6 +166,45 @@ describe('版1からの移行', () => {
   });
 });
 
+describe('版5からの移行', () => {
+  it('ほかの数え方と重さの目安を足し、干ししいたけを足す。自分で入れた値・自分で足した食材はそのまま', async () => {
+    const name = `test-${++n}`;
+    const old = new Dexie(name);
+    old.version(5).stores({
+      foods: 'id, name, kind',
+      stocks: 'foodId',
+      pantry: 'foodId',
+      members: 'id, kind',
+      household: 'id',
+      recipes: 'id, course, source',
+      mealSets: 'id, startDate',
+      stockMoves: 'id, at, foodId',
+      feedbacks: 'id, at',
+      planDrafts: 'id',
+      ignoredWords: 'word',
+    });
+    // 版5のころの食材:ほかの数え方がなく、重さは米だけ。干ししいたけはない
+    const v5Foods = INITIAL_FOODS.filter((f) => f.id !== 'dried_shiitake').map(({ altUnits: _altUnits, ...f }) => ({
+      ...f,
+      gramsPerUnit: f.id === 'rice' ? 150 : f.id === 'onion' ? 180 : null,
+    }));
+    await old.table('foods').bulkAdd(v5Foods);
+    await old.table('foods').add({ id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5, isCondiment: true, allergens: [], allergenUncertain: false, gramsPerUnit: null });
+    // 自分で単位を変えた食材には、初期データの重さを入れない
+    await old.table('foods').update('carrot', { unit: 'g' });
+    old.close();
+
+    const db = new KondateDB(name);
+    opened.push(db);
+    expect(await db.foods.get('cabbage')).toMatchObject({ gramsPerUnit: 1000, altUnits: [{ unit: '枚', amount: 0.1 }, { unit: '玉', amount: 1 }] });
+    expect(await db.foods.get('onion')).toMatchObject({ gramsPerUnit: 180, altUnits: [{ unit: '玉', amount: 1 }] });
+    expect(await db.foods.get('carrot')).toMatchObject({ unit: 'g', gramsPerUnit: null });
+    expect(await db.foods.get('user_1')).toMatchObject({ gramsPerUnit: null, altUnits: [] });
+    expect(await db.foods.get('dried_shiitake')).toMatchObject({ name: '干ししいたけ', gramsPerUnit: 3 });
+    expect(await db.foods.count()).toBe(INITIAL_FOODS.length + 1);
+  });
+});
+
 describe('献立の確定・キャンセルの保存', () => {
   it('確定で在庫が減り、買った→1食キャンセル→全体キャンセルで、確定前+買った分に戻る。動きはすべて記録される', async () => {
     const { confirmPlanToDb, cancelDayInDb, cancelSetInDb, markBoughtInDb } = await import('./mealSetRepo');

@@ -1,6 +1,6 @@
 // 貼り付けた文字を読む(純粋関数)
 // ショートカットがコピーした JSON、構造化データそのもの(JSON-LD)、ただのページの文字の3通りに対応する
-import { SHORTCUT_MARK } from '../../config/recipeImport';
+import { RECIPE_NAME_DECORATIONS, SHORTCUT_MARK } from '../../config/recipeImport';
 import { cleanText } from '../textInput/normalize';
 import { recipeMinutes } from './duration';
 import { parsePageText } from './pageText';
@@ -60,12 +60,20 @@ export function findRecipeNode(node: unknown, depth = 0): JsonObject | null {
   return null;
 }
 
+/** 構造化データの料理名から飾りを取る(取って空になるときは取らない) */
+export function cleanRecipeName(name: string): string {
+  const clean = cleanText(decodeEntities(name));
+  let result = clean;
+  for (const re of RECIPE_NAME_DECORATIONS) result = result.replace(re, '').trim();
+  return result === '' ? clean : result;
+}
+
 /** 構造化データの項目から読む(作り方の項目は読まない) */
 function fromRecipeFields(fields: JsonObject, url: string | null): ImportedPage {
   return {
     from: '構造化データ',
     url,
-    name: cleanText(decodeEntities(str(fields.name) ?? '')),
+    name: cleanRecipeName(str(fields.name) ?? ''),
     ingredientLines: strList(fields.recipeIngredient)
       .map((l) => cleanText(decodeEntities(l)))
       .filter((l) => l !== ''),

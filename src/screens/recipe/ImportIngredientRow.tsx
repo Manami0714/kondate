@@ -13,6 +13,8 @@ function noteLabel(note: ImportAmountNote, food: Food, hasAmount: boolean): stri
   switch (note) {
     case 'not-number':
       return hasAmount ? '量が数字ではなかったので、少しの量にしました。確かめてください' : '量が数字ではありませんでした。量を入れてください';
+    case 'little':
+      return '量が書かれていなかったので少しにしました。直せます';
     case 'converted':
       return `辞書の単位(${food.unit})に換算しました`;
     case 'unit-mismatch':

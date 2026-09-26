@@ -1,5 +1,5 @@
 // 取り込みの確認画面の内容から、保存するものを決める(純粋関数)
-import { DIFFICULTY_BY_MINUTES } from '../../config/recipeImport';
+import { AUTO_MAIN_COUNT, DEFAULT_MINUTES, DEFAULT_SERVINGS, DIFFICULTY_BY_MINUTES } from '../../config/recipeImport';
 import type { CookingMethod, Flavor } from '../../data/tags';
 import type { Course, Difficulty, Food, Recipe } from '../../db/types';
 import { withAlias } from '../aliases';
@@ -7,6 +7,7 @@ import { normalizeForSearch } from '../foodSearch';
 import { amountToInput } from '../format';
 import { parseAmount, validateRecipeDraft, type RecipeDraft } from '../forms';
 import type { IdGenerator } from '../id';
+import { canBeMain } from '../planner/mainFoods';
 import { roundAmount } from '../stock';
 import type { ImportedPage, ImportIngredient } from './types';
 
@@ -37,10 +38,26 @@ export interface ImportFormState {
   rows: ImportRowState[];
 }
 
-/** 難易度の初期値:調理時間から決める。時間がわからなければ「むずかしい」 */
-export function initialDifficulty(minutes: number | null): Difficulty {
-  if (minutes === null) return 3;
+/** 難易度の初期値:調理時間から決める(らくらく・ふつうの時間を超えれば「むずかしい」) */
+export function initialDifficulty(minutes: number): Difficulty {
   return DIFFICULTY_BY_MINUTES.find((d) => minutes <= d.maxMinutes)?.difficulty ?? 3;
+}
+
+/**
+ * 最初から「主」の印を付ける材料(行の番号)。材料は主役から先に書かれることが多いので、
+ * 上から見て、食材が決まっていて主な材料にできる(調味料・薬味でない)、量が数字の材料を AUTO_MAIN_COUNT 個まで選ぶ
+ */
+export function autoMainIndexes(items: readonly ImportIngredient[], byId: ReadonlyMap<string, Food>): Set<number> {
+  const picked = new Set<number>();
+  items.forEach((item, i) => {
+    if (picked.size >= AUTO_MAIN_COUNT) return;
+    if (item.status === '材料に入れない' || item.vague || item.foodId === null) return;
+    if (!canBeMain(byId.get(item.foodId))) return;
+    // 同じ食材が2行あっても1つと数える
+    if ([...picked].some((j) => items[j].foodId === item.foodId)) return;
+    picked.add(i);
+  });
+  return picked;
 }
 
 /** 読み取った材料から、確認画面の1行を作る */
@@ -56,18 +73,29 @@ export function toRowState(item: ImportIngredient, key: number): ImportRowState 
   };
 }
 
-/** 読み取ったページから、確認画面の初期状態を作る(区分・タグは選んでもらうので初期値なし) */
-export function initialFormState(page: ImportedPage, items: readonly ImportIngredient[]): ImportFormState {
+/**
+ * 読み取ったページから、確認画面の初期状態を作る。
+ * - 人数・時間が書かれていなければ初期値(2人分・30分)にする。難易度はその時間から決める
+ * - 上から1〜2個の材料に「主」の印を付ける
+ * - 区分・タグは選んでもらうので初期値なし
+ */
+export function initialFormState(
+  page: ImportedPage,
+  items: readonly ImportIngredient[],
+  byId: ReadonlyMap<string, Food>,
+): ImportFormState {
+  const minutes = page.minutes ?? DEFAULT_MINUTES;
+  const mains = autoMainIndexes(items, byId);
   return {
     name: page.name,
     url: page.url ?? '',
     course: '主菜',
-    difficulty: initialDifficulty(page.minutes),
-    minutes: page.minutes === null ? '' : String(page.minutes),
-    servings: page.servings === null ? '' : String(page.servings),
+    difficulty: initialDifficulty(minutes),
+    minutes: String(minutes),
+    servings: String(page.servings ?? DEFAULT_SERVINGS),
     methods: [],
     flavors: [],
-    rows: items.map(toRowState),
+    rows: items.map((item, i) => ({ ...toRowState(item, i), main: mains.has(i) })),
   };
 }
 

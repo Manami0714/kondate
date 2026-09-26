@@ -2,6 +2,7 @@
 import type { Allergen } from '../data/allergens';
 import type { CookingMethod, Flavor } from '../data/tags';
 import type {
+  AltUnit,
   Appetite,
   Course,
   Difficulty,
@@ -56,6 +57,8 @@ export interface FoodDraft {
   allergenUncertain: boolean;
   /** 1単位あたりの重さ(g)。空欄ならわからない */
   gramsPerUnit: string;
+  /** ほかの数え方(1{unit} = amount 辞書の単位)。単位と量が両方空の行は無視する */
+  altUnits: { unit: string; amount: string }[];
 }
 
 /** 辞書の食材を編集用の下書きにする */
@@ -72,6 +75,7 @@ export function foodToDraft(food: Food): FoodDraft {
     allergens: [...food.allergens],
     allergenUncertain: food.allergenUncertain,
     gramsPerUnit: food.gramsPerUnit === null ? '' : String(food.gramsPerUnit),
+    altUnits: food.altUnits.map((a) => ({ unit: a.unit, amount: String(a.amount) })),
   };
 }
 
@@ -100,6 +104,17 @@ export function validateFoodDraft(draft: FoodDraft, existing: readonly Food[], i
     gramsPerUnit = parseAmount(draft.gramsPerUnit);
     if (gramsPerUnit === null || gramsPerUnit <= 0) errors.push('1単位あたりの重さは0より大きい数字にしてください(わからなければ空欄)');
   }
+  const altUnits: AltUnit[] = [];
+  for (const row of draft.altUnits) {
+    const altUnit = row.unit.trim();
+    if (altUnit === '' && row.amount.trim() === '') continue;
+    const amount = parseAmount(row.amount);
+    if (altUnit === '') errors.push('ほかの数え方の単位を入れてください');
+    else if (altUnit === unit) errors.push(`ほかの数え方の単位「${altUnit}」は、辞書の単位と同じです`);
+    else if (altUnits.some((a) => a.unit === altUnit)) errors.push(`ほかの数え方の単位「${altUnit}」が2回入っています`);
+    if (amount === null || amount <= 0) errors.push(`ほかの数え方「1${altUnit}」の量を0より大きい数字にしてください`);
+    if (altUnit !== '' && amount !== null && amount > 0) altUnits.push({ unit: altUnit, amount });
+  }
   if (errors.length > 0) return { ok: false, errors };
   const aliases = splitList(draft.aliasesText).filter((a) => a !== name);
   return {
@@ -118,6 +133,7 @@ export function validateFoodDraft(draft: FoodDraft, existing: readonly Food[], i
       allergenUncertain: draft.allergenUncertain,
       // 単位が g なら換算しないので持たない
       gramsPerUnit: unit === 'g' ? null : gramsPerUnit,
+      altUnits,
     },
   };
 }

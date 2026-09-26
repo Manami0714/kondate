@@ -51,6 +51,10 @@ export const UNIT_WORDS: readonly { word: string; unit: string; factor: number }
   { word: '尾', unit: '尾', factor: 1 },
   { word: '匹', unit: '匹', factor: 1 },
   { word: '合', unit: '合', factor: 1 },
+  // 食材ごとの「ほかの数え方」で使う単位(いか1杯、大根5cm)
+  { word: '杯', unit: '杯', factor: 1 },
+  { word: 'cm', unit: 'cm', factor: 1 },
+  { word: 'センチ', unit: 'cm', factor: 1 },
   { word: '大サジ', unit: '大さじ', factor: 1 },
   { word: '小サジ', unit: '小さじ', factor: 1 },
 ];

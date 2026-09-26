@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseAmount } from './forms';
-import { amountToInput, formatAmount } from './format';
+import { amountToInput, formatAmount, formatStockAmount } from './format';
 
 describe('量の表示', () => {
   it.each([
@@ -38,5 +38,18 @@ describe('計算した量の表示', () => {
     expect(formatApproxAmount(2.27, '切れ')).toBe('2と1/4切れ');
     expect(formatApproxAmount(0.11, '小さじ')).toBe('1/4小さじ');
     expect(formatApproxAmount(3, '個')).toBe('3個');
+  });
+});
+
+describe('在庫の量の表示', () => {
+  it('1単位あたりの重さがある食材は、重さも添える', () => {
+    expect(formatStockAmount(2, { unit: '袋', gramsPerUnit: 100 })).toBe('2袋(約200g)');
+    expect(formatStockAmount(0.32, { unit: '枚', gramsPerUnit: 250 })).toBe('0.32枚(約80g)');
+    expect(formatStockAmount(1.5, { unit: '本', gramsPerUnit: 150 })).toBe('1と1/2本(約225g)');
+  });
+
+  it('重さがない食材と、g・ml の食材はそのまま', () => {
+    expect(formatStockAmount(2, { unit: '袋', gramsPerUnit: null })).toBe('2袋');
+    expect(formatStockAmount(300, { unit: 'g', gramsPerUnit: null })).toBe('300g');
   });
 });

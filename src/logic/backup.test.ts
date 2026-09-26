@@ -147,7 +147,7 @@ describe('版1のファイルの読み込み', () => {
     const data = sampleData();
     data.foods = [
       ...INITIAL_FOODS,
-      { id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5, isCondiment: true, allergens: ['大豆'], allergenUncertain: true, gramsPerUnit: 40 },
+      { id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5, isCondiment: true, allergens: ['大豆'], allergenUncertain: true, gramsPerUnit: 40, altUnits: [] },
     ];
     data.recipes = [
       ...INITIAL_RECIPES,
@@ -173,14 +173,47 @@ describe('版2のファイルの読み込み', () => {
 });
 
 describe('版3のファイルの読み込み', () => {
-  it('食材の1単位あたりの重さがなくても、初期食材は初期データの値(米=150g)、ほかは空で読み込める', () => {
+  it('食材の1単位あたりの重さがなくても、初期食材は初期データの値(米=150g、卵=60g)で読み込める', () => {
     const raw = JSON.parse(serializeBackup(sampleData(), now));
     raw.formatVersion = 3;
     for (const f of raw.data.foods) delete f.gramsPerUnit;
     const r = parseBackup(JSON.stringify(raw));
     if (!r.ok) throw new Error(r.error);
     expect(r.data.foods.find((f) => f.id === 'rice')?.gramsPerUnit).toBe(150);
-    expect(r.data.foods.find((f) => f.id === 'egg')?.gramsPerUnit).toBeNull();
+    expect(r.data.foods.find((f) => f.id === 'egg')?.gramsPerUnit).toBe(60);
+  });
+});
+
+describe('版4のファイルの読み込み', () => {
+  it('ほかの数え方・重さの目安・干ししいたけを足す。自分で入れた重さ・自分で足した食材はそのまま', () => {
+    const data = sampleData();
+    data.foods = [
+      ...INITIAL_FOODS.filter((f) => f.id !== 'dried_shiitake'),
+      { id: 'user_1', name: 'みょうが', aliases: [], unit: '個', usualAmount: 3, kind: '食材', foodGroup: '緑', shelfLifeDays: 5, isCondiment: true, allergens: [], allergenUncertain: false, gramsPerUnit: null, altUnits: [] },
+    ];
+    const raw = JSON.parse(serializeBackup(data, now));
+    raw.formatVersion = 4;
+    for (const f of raw.data.foods) {
+      delete f.altUnits;
+      // 版4のころの初期食材は、米のほかは重さがなかった
+      if (f.id !== 'rice') f.gramsPerUnit = null;
+      // 自分で入れた重さ
+      if (f.id === 'onion') f.gramsPerUnit = 180;
+    }
+    const r = parseBackup(JSON.stringify(raw));
+    if (!r.ok) throw new Error(r.error);
+    const by = (id: string) => r.data.foods.find((f) => f.id === id);
+    expect(by('cabbage')).toMatchObject({ gramsPerUnit: 1000, altUnits: [{ unit: '枚', amount: 0.1 }, { unit: '玉', amount: 1 }] });
+    expect(by('konnyaku')?.gramsPerUnit).toBe(250);
+    expect(by('onion')?.gramsPerUnit).toBe(180);
+    expect(by('user_1')).toMatchObject({ gramsPerUnit: null, altUnits: [] });
+    expect(by('dried_shiitake')).toMatchObject({ name: '干ししいたけ', unit: '枚', gramsPerUnit: 3 });
+  });
+
+  it('ほかの数え方の形が正しくなければ拒否する', () => {
+    const raw = JSON.parse(serializeBackup(sampleData(), now));
+    raw.data.foods[0].altUnits = [{ unit: '枚' }];
+    expect(parseBackup(JSON.stringify(raw)).ok).toBe(false);
   });
 });
 
@@ -196,7 +229,7 @@ describe('壊れたファイルを拒否する', () => {
   });
 
   it('新しい版の形式', () => {
-    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 4', '"formatVersion": 999');
+    const text = serializeBackup(sampleData(), now).replace('"formatVersion": 5', '"formatVersion": 999');
     const r = parseBackup(text);
     expect(r.ok).toBe(false);
   });

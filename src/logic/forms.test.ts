@@ -49,6 +49,7 @@ describe('食材辞書への追加', () => {
     allergens: [],
     allergenUncertain: false,
     gramsPerUnit: '',
+    altUnits: [],
   };
 
   it('正しく入れると食材になる', () => {
@@ -68,8 +69,41 @@ describe('食材辞書への追加', () => {
         allergens: [],
         allergenUncertain: false,
         gramsPerUnit: null,
+        altUnits: [],
       },
     });
+  });
+
+  it('ほかの数え方:入れた行が数字になり、空の行は無視する', () => {
+    const r = validateFoodDraft(
+      { ...base, altUnits: [{ unit: ' cm ', amount: '0.05' }, { unit: '', amount: '' }, { unit: '袋', amount: '1/2' }] },
+      INITIAL_FOODS,
+      'new1',
+    );
+    expect(r.ok && r.value.altUnits).toEqual([
+      { unit: 'cm', amount: 0.05 },
+      { unit: '袋', amount: 0.5 },
+    ]);
+  });
+
+  it.each([
+    [[{ unit: '', amount: '1' }], 'ほかの数え方の単位を入れてください'],
+    [[{ unit: '本', amount: '1' }], 'ほかの数え方の単位「本」は、辞書の単位と同じです'],
+    [[{ unit: '枚', amount: '0' }], 'ほかの数え方「1枚」の量を0より大きい数字にしてください'],
+    [[{ unit: '枚', amount: '1' }, { unit: '枚', amount: '2' }], 'ほかの数え方の単位「枚」が2回入っています'],
+  ])('ほかの数え方の間違いはエラー:%j', (altUnits, error) => {
+    const r = validateFoodDraft({ ...base, altUnits }, INITIAL_FOODS, 'new1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors).toContain(error);
+  });
+
+  it('編集用の下書きにすると、ほかの数え方も入る', () => {
+    const cabbage = INITIAL_FOODS.find((f) => f.id === 'cabbage');
+    if (!cabbage) throw new Error('キャベツがない');
+    expect(foodToDraft(cabbage).altUnits).toEqual([
+      { unit: '枚', amount: '0.1' },
+      { unit: '玉', amount: '1' },
+    ]);
   });
 
   it('1単位あたりの重さ:入れれば数字、空欄なら null、0以下はエラー、単位が g なら持たない', () => {

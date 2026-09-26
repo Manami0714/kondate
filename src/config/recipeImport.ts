@@ -6,6 +6,18 @@ import { TIME_PRESETS } from './scoring';
 /** ショートカットがコピーする文字の印(docs/shortcut/kondate-import.js の MARK と同じ) */
 export const SHORTCUT_MARK = 1;
 
+/** 人数が書かれていないときの初期値(確認画面で知らせて直してもらう) */
+export const DEFAULT_SERVINGS = 2;
+
+/** 調理時間が書かれていないときの初期値(難易度の初期値もこの時間から決める) */
+export const DEFAULT_MINUTES = 30;
+
+/**
+ * 最初から「主」の印を付ける材料の数。材料の上から、調味料・薬味・量が「適量」などの材料を飛ばして数える
+ * (材料は主役から先に書かれることが多いため)
+ */
+export const AUTO_MAIN_COUNT = 2;
+
 /**
  * 数字でない量の言葉 → 小さじ何杯分とみなすか(確認画面で「量が数字ではありませんでした」と知らせて直してもらう)。
  * 比べる形(ひらがな→カタカナ)で書く。長いものから順に照らし合わせる
@@ -78,6 +90,7 @@ export const SUFFIX_UNIT_WORDS: readonly { word: string; unit: string; factor: n
   { word: '房', unit: '房', factor: 1 },
   { word: '尾', unit: '尾', factor: 1 },
   { word: '匹', unit: '匹', factor: 1 },
+  { word: '杯', unit: '杯', factor: 1 },
   { word: '合', unit: '合', factor: 1 },
   { word: '皿分', unit: '皿分', factor: 1 },
   { word: 'cm', unit: 'cm', factor: 1 },
@@ -93,9 +106,10 @@ export const PACKAGE_UNITS: readonly string[] = ['パック', '袋', '缶'];
 export const NOT_INGREDIENT_WORDS: readonly string[] = ['水', 'お水', 'お湯', '湯', '熱湯', 'ぬるま湯', '氷', '氷水', '冷水'];
 
 /**
- * 材料の行の頭につく印(「●醤油」「★砂糖」「・塩」)。表示の形で書く
+ * 材料の行の頭につく印(「●醤油」「★砂糖」「✿しょうゆ」「♡塩」「・塩」)。表示の形で書く。
+ * 記号の文字(\p{So})はすべて印とみなす。「<」「(」はまとまりの見出しなので、ここには入れない
  */
-export const INGREDIENT_MARKS = /^[\s●○◎◉★☆■□◆◇▲△▼▽・※*＊♪♡♥◯〇-]+/;
+export const INGREDIENT_MARKS = /^[\s\p{So}・※*＊◯〇-]+/u;
 
 /**
  * 材料のまとまりの見出し(「<合わせ調味料>」「【A】」「(A)」)。行の頭にあれば取り、行全体なら見出しとして捨てる。
@@ -105,6 +119,16 @@ export const GROUP_LABEL = /^[(（\[［【<＜〈《『「]\s*[^()（）\[\]［�
 
 /** 行の頭の、まとまりの記号だけの英字(「A 醤油 大さじ1」の A) */
 export const GROUP_LETTER = /^[A-Za-zＡ-Ｚａ-ｚ]\s+/;
+
+/**
+ * 構造化データの料理名から取る飾り(前後の記号「✿…✿」、デリッシュキッチンの「〜の作り方が動画でわかる!…」など)。
+ * 取って空になるときは取らない
+ */
+export const RECIPE_NAME_DECORATIONS: readonly RegExp[] = [
+  /^[\s\p{So}]+|[\s\p{So}]+$/gu,
+  /の作り方が動画でわかる.*$/,
+  /\s*(?:の)?(?:レシピ|作り方)$/,
+];
 
 /** 料理名から取る、サイト名などの飾り(ページの文字から読むとき) */
 export const TITLE_DECORATIONS: readonly RegExp[] = [

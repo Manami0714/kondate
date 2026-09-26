@@ -14,15 +14,26 @@ export function isNotIngredient(name: string): boolean {
   return NOT_INGREDIENT_KEYS.has(normalizeForSearch(name));
 }
 
+/** 量が数字でないか(適量・お好みで・少々など。書いていない・読めないときも含む) */
+export function isVagueAmount(amountText: string): boolean {
+  return parseRecipeAmountCandidates(amountText).every((q) => q.kind === 'vague');
+}
+
 /**
  * 材料の量の文字を、その食材の辞書の単位での量にする。
- * ( ) の外と中の量のうち、辞書の単位にそのまま合うものを優先する(「1枚(300g)」で辞書が g なら 300g)
+ * ( ) の外と中の量のうち、辞書の単位にそのまま合うもの、次に換算できるものを優先する(「1枚(300g)」で辞書が g なら 300g)
  */
 export function ingredientAmount(amountText: string, food: Food): { amount: number | null; note: ImportAmountNote | null } {
   const candidates = amountText.trim() === '' ? [] : parseRecipeAmountCandidates(amountText);
   if (candidates.length === 0) return toRecipeFoodAmount(null, food);
   const results = candidates.map((q) => toRecipeFoodAmount(q, food));
-  return results.find((r) => r.amount !== null && r.note !== 'unit-mismatch') ?? results[0];
+  // 辞書の単位にそのまま合うもの → 換算できたもの → 最初のもの の順
+  // (「鶏むね肉 1枚(300g)」は、1枚=250g の目安より、書いてある 300g を使う)
+  return (
+    results.find((r) => r.amount !== null && r.note === null) ??
+    results.find((r) => r.amount !== null && r.note !== 'unit-mismatch') ??
+    results[0]
+  );
 }
 
 /**
@@ -35,7 +46,7 @@ export function ingredientAmount(amountText: string, food: Food): { amount: numb
 export function readIngredientLine(line: string, foods: readonly Food[]): ImportIngredient | null {
   const split = splitIngredientLine(line);
   if (split === null || split.name === '') return null;
-  const base = { line: line.trim(), name: split.name, amountText: split.amountText };
+  const base = { line: line.trim(), name: split.name, amountText: split.amountText, vague: isVagueAmount(split.amountText) };
   const empty = { foodId: null, candidateIds: [], amount: null, note: null };
   if (isNotIngredient(split.name)) return { ...base, ...empty, status: '材料に入れない' };
 

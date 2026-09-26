@@ -50,6 +50,40 @@ describe('食材辞書の初期データ', () => {
     );
   });
 
+  it('1単位あたりの重さ:g・ml・調味料以外の食材にはすべて目安があり、正の数', () => {
+    for (const f of INITIAL_FOODS) {
+      if (f.unit === 'g' || f.unit === 'ml' || f.kind === '調味料') expect(f.gramsPerUnit, f.name).toBeNull();
+      else expect(f.gramsPerUnit, f.name).toBeGreaterThan(0);
+    }
+    expect(INITIAL_FOODS.find((f) => f.id === 'konnyaku')?.gramsPerUnit).toBe(250);
+  });
+
+  it('ほかの数え方:辞書の単位と違う単位で、量が正の数、同じ単位が2回ない', () => {
+    for (const f of INITIAL_FOODS) {
+      const units = f.altUnits.map((a) => a.unit);
+      expect(new Set(units).size, f.name).toBe(units.length);
+      for (const a of f.altUnits) {
+        expect(a.unit, f.name).not.toBe(f.unit);
+        expect(a.amount, f.name).toBeGreaterThan(0);
+      }
+    }
+    expect(INITIAL_FOODS.find((f) => f.id === 'shiitake')?.altUnits).toEqual([{ unit: '枚', amount: 1 }]);
+  });
+
+  it('干ししいたけは、しいたけとは別の食材(枚、保存180日、アレルギー物質なし、要確認なし)', () => {
+    expect(INITIAL_FOODS.find((f) => f.id === 'dried_shiitake')).toMatchObject({
+      name: '干ししいたけ',
+      unit: '枚',
+      usualAmount: 10,
+      foodGroup: '緑',
+      shelfLifeDays: 180,
+      allergens: [],
+      allergenUncertain: false,
+      isCondiment: false,
+      gramsPerUnit: 3,
+    });
+  });
+
   it('ふつうの量と保存日数が正の数', () => {
     for (const f of INITIAL_FOODS) {
       expect(f.usualAmount, f.id).toBeGreaterThan(0);

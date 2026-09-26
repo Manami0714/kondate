@@ -20,6 +20,20 @@ describe('昼食の口頭入力', () => {
     expect(r.unread).toEqual([]);
   });
 
+  it('食材ごとのほかの数え方で換算する(キャベツ2枚=0.2個、鶏もも肉1枚=250g、大根5cm=0.15本)', () => {
+    const r = parseLunch('キャベツ2枚と鶏もも肉1枚と大根5cm使った', INITIAL_FOODS, stocks);
+    expect(r.items.map((i) => [i.foodId, i.amount, i.note])).toEqual([
+      ['cabbage', 0.2, 'alt-unit'],
+      ['chicken_thigh', 250, 'alt-unit'],
+      ['daikon', 0.15, 'alt-unit'],
+    ]);
+  });
+
+  it('ほかの数え方がない食材は、今まで通り(卵2枚は卵のふつうの量)', () => {
+    const r = parseLunch('卵2枚', INITIAL_FOODS, stocks);
+    expect(r.items.map((i) => [i.foodId, i.amount, i.note])).toEqual([['egg', 20, 'unit-mismatch']]);
+  });
+
   it('g の食材の「半分」は在庫の半分、「少し」はふつうの量の1割', () => {
     const r = parseLunch('豚こま半分と卵少し', INITIAL_FOODS, stocks);
     expect(r.items.map((i) => [i.foodId, i.amount])).toEqual([

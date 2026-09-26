@@ -3,6 +3,7 @@
 import { IGNORED_CONTAIN_MIN_LENGTH } from '../../config/receipt';
 import { COUNT_UNITS, GENERIC_COUNT_UNIT } from '../../config/textInput';
 import type { Food, IgnoredWord } from '../../db/types';
+import { findAltUnit } from '../altUnits';
 import { findFoodByExactName, normalizeForSearch } from '../foodSearch';
 import { roundAmount } from '../stock';
 import { toFoodAmount, type AmountNote, type Quantity } from '../textInput/amount';
@@ -51,6 +52,9 @@ function pickQuantity(name: string, food: Food | null): Quantity | null {
         (q.unit === food.unit || (q.unit === GENERIC_COUNT_UNIT && COUNT_UNITS.includes(food.unit)) || q.unit === null),
     );
     if (fits) return fits;
+    // 食材ごとのほかの数え方で書かれた量(豆腐1パック=1丁など)
+    const alt = list.find((q) => q.kind === 'number' && q.unit !== null && findAltUnit(food, q.unit) !== undefined);
+    if (alt) return alt;
     // 単位が合わなければ、重さで書かれた量(1単位あたりの重さで換算できる)を優先する
     if (food.gramsPerUnit !== null) {
       const grams = list.find((q) => q.kind === 'number' && q.unit === 'g');

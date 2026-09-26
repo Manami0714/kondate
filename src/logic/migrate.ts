@@ -91,6 +91,27 @@ export function upgradeBackupDataV3(data: Obj): void {
 }
 
 /**
+ * 食材:ほかの数え方を足し、1単位あたりの重さの目安を入れる。
+ * 初期食材は初期データの値を使う。ただし、すでに入っている値(自分で入れた重さ・数え方)は変えない
+ */
+export function upgradeFoodV5(o: Obj): void {
+  const seed = typeof o.id === 'string' ? seedFoods.get(o.id) : undefined;
+  if (o.altUnits === undefined) o.altUnits = seed ? seed.altUnits.map((a) => ({ ...a })) : [];
+  if ((o.gramsPerUnit === null || o.gramsPerUnit === undefined) && seed && seed.gramsPerUnit !== null && o.unit === seed.unit) {
+    o.gramsPerUnit = seed.gramsPerUnit;
+  }
+}
+
+/** 版4の書き出しファイルの data を、版5の形に直す(ほかの数え方・重さの目安・干ししいたけを足す) */
+export function upgradeBackupDataV4(data: Obj): void {
+  if (Array.isArray(data.foods)) {
+    for (const f of data.foods) if (isObj(f)) upgradeFoodV5(f);
+    const ids = new Set(data.foods.filter(isObj).map((o) => String(o.id)));
+    data.foods.push(...missingSeeds(ids, new Set()).foods);
+  }
+}
+
+/**
  * 初期データのうち、まだ入っていない食材とレシピ(初期レシピを追加したときに、既存の端末へ届けるため)。
  * 追加した回ごとにデータベースの版を上げ、その upgrade でこれを入れる
  */

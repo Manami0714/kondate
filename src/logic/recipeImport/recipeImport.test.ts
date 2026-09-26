@@ -4,7 +4,17 @@ import type { Food, Recipe } from '../../db/types';
 import { sequentialIds } from '../id';
 import { readPastedText } from './clipboard';
 import { parseMinutes, recipeMinutes } from './duration';
-import { COOKPAD_LIKE, DELISH_LIKE, KURASHIRU_LIKE, PAGE_TEXT, STEP_TEXT } from './fixtures';
+import {
+  COOKPAD_LIKE,
+  COOKPAD_SHORTCUT_OUTPUT,
+  DELISH_LIKE,
+  DELISH_SHORTCUT_OUTPUT,
+  KURASHIRU_LIKE,
+  KURASHIRU_SHORTCUT_OUTPUT,
+  PAGE_TEXT,
+  STEP_TEXT,
+} from './fixtures';
+import { DEFAULT_MINUTES, DEFAULT_SERVINGS } from '../../config/recipeImport';
 import {
   findRecipeByUrl,
   initialDifficulty,
@@ -22,6 +32,7 @@ import type { ImportedPage } from './types';
 
 const foods = INITIAL_FOODS;
 const food = (id: string) => foods.find((f) => f.id === id) as Food;
+const byFoodId = new Map(foods.map((f) => [f.id, f]));
 
 /** ショートカットがコピーする形にする */
 function shortcutJson(recipe: Record<string, unknown>, url: string): string {
@@ -122,16 +133,19 @@ describe('量の読み取り', () => {
     expect(toRecipeFoodAmount({ kind: 'number', value: 2, unit: '個' }, food('carrot'))).toEqual({ amount: 2, note: null });
     // パックで辞書が g → ふつうの量×数
     expect(toRecipeFoodAmount({ kind: 'number', value: 1, unit: 'パック' }, food('pork_koma'))).toEqual({ amount: 300, note: 'unit-mismatch' });
-    // 重さで辞書が本 → 決められない
-    expect(toRecipeFoodAmount({ kind: 'number', value: 100, unit: 'g' }, food('carrot'))).toEqual({ amount: null, note: 'unit-mismatch' });
+    // 重さで辞書が本:1単位あたりの重さ(にんじん1本=150g)で換算する。重さがなければ決められない
+    expect(toRecipeFoodAmount({ kind: 'number', value: 100, unit: 'g' }, food('carrot'))).toEqual({ amount: 0.667, note: 'converted' });
+    expect(toRecipeFoodAmount({ kind: 'number', value: 100, unit: 'g' }, { ...food('carrot'), gramsPerUnit: null })).toEqual({ amount: null, note: 'unit-mismatch' });
     // 食材(調味料でない)の g とかさは換算しない
     expect(toRecipeFoodAmount({ kind: 'number', value: 1, unit: '大さじ' }, food('pork_koma'))).toEqual({ amount: null, note: 'unit-mismatch' });
   });
 
-  it('数字でない量:かさ・g の材料は小さじ何杯分を換算、数える単位の材料は空欄', () => {
+  it('数字でない量:かさ・g の材料は小さじ何杯分を換算、数える単位の材料は少し', () => {
     expect(toRecipeFoodAmount({ kind: 'vague', teaspoons: 1 / 8 }, food('salt'))).toEqual({ amount: 0.125, note: 'not-number' });
     expect(toRecipeFoodAmount({ kind: 'vague', teaspoons: 1 }, food('salad_oil'))).toEqual({ amount: 0.333, note: 'not-number' });
-    expect(toRecipeFoodAmount({ kind: 'vague', teaspoons: 1 }, food('scallion'))).toEqual({ amount: null, note: 'not-number' });
+    // 数える単位の材料は「少し」(ふつうの量の1割)
+    expect(toRecipeFoodAmount({ kind: 'vague', teaspoons: 1 }, food('scallion'))).toEqual({ amount: 0.1, note: 'little' });
+    expect(toRecipeFoodAmount(null, food('nori'))).toEqual({ amount: 1, note: 'little' });
     // 量が書いていないときも、適量と同じ
     expect(toRecipeFoodAmount(null, food('salad_oil'))).toEqual({ amount: 0.333, note: 'not-number' });
   });
@@ -229,7 +243,7 @@ describe('3サイトの形の構造化データを読む', () => {
       ['sugar', 1, '読み取った'],
       ['sake', 2, '読み取った'],
       [null, null, '材料に入れない'],
-      ['scallion', null, '読み取った'],
+      ['scallion', 0.1, '読み取った'],
     ]);
   });
 });
@@ -276,11 +290,92 @@ describe('構造化データがないページの文字(予備の読み取り)',
   });
 });
 
+describe('実際のページで見た書き方(架空のレシピで再現)', () => {
+  const formOf = (text: string) => {
+    const page = readOk(text);
+    const items = readIngredients(page.ingredientLines, foods);
+    return { page, items, form: initialFormState(page, items, byFoodId) };
+  };
+
+  it('クックパッドの形:人数・時間がなければ2人分・30分(難易度はふつう)、記号を取って読む', () => {
+    const { page, items, form } = formOf(COOKPAD_SHORTCUT_OUTPUT);
+    expect(page).toMatchObject({ name: 'テスト用 鶏そぼろ丼', servings: null, minutes: null });
+    expect(form).toMatchObject({ servings: String(DEFAULT_SERVINGS), minutes: String(DEFAULT_MINUTES), difficulty: 2 });
+    expect(items.map((i) => [i.name, i.status, i.foodId, i.amount])).toEqual([
+      ['鶏ひき肉', '読み取った', 'chicken_mince', 150],
+      ['卵', '読み取った', 'egg', 2],
+      ['しょうゆ', '読み取った', 'soy_sauce', 2],
+      ['砂糖', '読み取った', 'sugar', 1],
+      ['塩', '読み取った', 'salt', 0.125],
+      ['白ゴマ', '読み取った', 'sesame', 0.333],
+      ['酒', '読み取った', 'sake', 1],
+    ]);
+    // 上から、調味料以外の最初の2つに「主」
+    expect(form.rows.filter((r) => r.main).map((r) => r.foodId)).toEqual(['chicken_mince', 'egg']);
+  });
+
+  it('クラシルの形:数える単位の材料の「適量」は少し(ふつうの量の1割)。量が適量の材料は主にしない', () => {
+    const { page, items, form } = formOf(KURASHIRU_SHORTCUT_OUTPUT);
+    expect(page).toMatchObject({ servings: 1, minutes: 10 });
+    expect(items[0]).toMatchObject({ name: 'のり', foodId: 'nori', amount: 1, note: 'little', vague: true });
+    // のり(適量)を飛ばして、うどん・ツナ缶
+    expect(form.rows.filter((r) => r.main).map((r) => r.foodId)).toEqual(['udon', 'tuna_can']);
+    expect(items.filter((i) => i.status === '材料に入れない').map((i) => i.name)).toEqual(['お湯', '氷水']);
+  });
+
+  it('デリッシュキッチンの形:料理名の飾りを取る。時間は秒でも読む。知らない単位(節)は ( ) の中の g を使う', () => {
+    const { page, items } = formOf(DELISH_SHORTCUT_OUTPUT);
+    expect(page).toMatchObject({ name: 'テスト用 根菜の煮物', minutes: 50, servings: 4 });
+    expect(items.find((i) => i.name === 'れんこん')).toMatchObject({ foodId: 'lotus', amount: 100, note: null });
+    expect(items.find((i) => i.name === 'ごぼう')).toMatchObject({ foodId: 'burdock', amount: 0.5 });
+  });
+
+  it('ほかの数え方・1単位あたりの重さで換算する。干ししいたけは、しいたけとは別の食材', () => {
+    const by = (line: string) => readIngredientLine(line, foods);
+    expect(by('こんにゃく 80g')).toMatchObject({ foodId: 'konnyaku', amount: 0.32, note: 'converted' });
+    expect(by('しいたけ 4枚')).toMatchObject({ status: '読み取った', foodId: 'shiitake', amount: 4, note: 'converted' });
+    expect(by('干ししいたけ 4枚')).toMatchObject({ status: '読み取った', foodId: 'dried_shiitake', amount: 4, note: null });
+    expect(by('キャベツ 2枚')).toMatchObject({ foodId: 'cabbage', amount: 0.2, note: 'converted' });
+    expect(by('キャベツ 1/4玉')).toMatchObject({ foodId: 'cabbage', amount: 0.25, note: 'converted' });
+    expect(by('鶏もも肉 1枚')).toMatchObject({ foodId: 'chicken_thigh', amount: 250, note: 'converted' });
+    expect(by('いか 1杯')).toMatchObject({ foodId: 'squid', amount: 250, note: 'converted' });
+    expect(by('大根 10cm')).toMatchObject({ foodId: 'daikon', amount: 0.3, note: 'converted' });
+    // 書いてある g があれば、ほかの数え方の目安より優先する
+    expect(by('鶏もも肉 1枚(300g)')).toMatchObject({ amount: 300, note: null });
+    // ほかの数え方がない食材の「枚」は、今まで通り決めない
+    expect(by('豚こま 3枚')).toMatchObject({ foodId: 'pork_koma', amount: null, note: 'unit-mismatch' });
+  });
+
+  it('知らない単位は単位として残し、辞書と違えば量を決めない', () => {
+    expect(parseRecipeAmount('1/2節')).toEqual({ kind: 'number', value: 0.5, unit: '節' });
+    expect(parseRecipeAmount('1強')).toEqual({ kind: 'number', value: 1, unit: null });
+    expect(toRecipeFoodAmount({ kind: 'number', value: 0.5, unit: '節' }, food('lotus'))).toEqual({ amount: null, note: 'unit-mismatch' });
+  });
+
+  it('主の自動選択:調味料・薬味・材料に入れない・適量・同じ食材は飛ばし、2つまで', () => {
+    const items = readIngredients(['水 200ml', 'しょうゆ 大さじ1', '長ねぎ 1本', 'キャベツ 適量', '豚こま 200g', '豚こま 100g', '玉ねぎ 1個', 'にんじん 1本'], foods);
+    const form = initialFormState(
+      { from: '構造化データ', url: 'https://a.example/r', name: 'x', ingredientLines: [], minutes: 10, servings: 2 },
+      items,
+      byFoodId,
+    );
+    expect(form.rows.filter((r) => r.main).map((r) => r.item.line)).toEqual(['豚こま 200g', '玉ねぎ 1個']);
+  });
+
+  it.each([
+    ['✿しょうゆ 大2', 'しょうゆ'],
+    ['♡だし 小1/2', 'だし'],
+    ['<合わせ調味料>', null],
+  ])('行の頭の記号:%s', (line, name) => {
+    expect(splitIngredientLine(line)?.name ?? null).toBe(name);
+  });
+});
+
 describe('保存するものを決める', () => {
   const KURASHIRU_URL = 'https://kurashiru.example/recipes/abc';
   const kurashiruForm = (): ImportFormState => {
     const page = readOk(shortcutJson(KURASHIRU_LIKE['@graph'][1], KURASHIRU_URL));
-    const form = initialFormState(page, readIngredients(page.ingredientLines, foods));
+    const form = initialFormState(page, readIngredients(page.ingredientLines, foods), byFoodId);
     form.rows = form.rows.map((r) => (r.foodId === 'spinach' ? { ...r, main: true } : r));
     return form;
   };
@@ -290,7 +385,6 @@ describe('保存するものを決める', () => {
     expect(initialDifficulty(21)).toBe(2);
     expect(initialDifficulty(40)).toBe(2);
     expect(initialDifficulty(41)).toBe(3);
-    expect(initialDifficulty(null)).toBe(3);
   });
 
   it('URL レシピとして保存し、作り方は持たない。水は材料に入らない', () => {
@@ -326,7 +420,7 @@ describe('保存するものを決める', () => {
 
   it('自信のない材料は確かめるまで保存せず、選んだ材料名は別名になって次から「読み取った」に入る', () => {
     const page = readOk(shortcutJson(COOKPAD_LIKE, 'https://cookpad.example/recipe/1'));
-    const form = initialFormState(page, readIngredients(page.ingredientLines, foods));
+    const form = initialFormState(page, readIngredients(page.ingredientLines, foods), byFoodId);
     const first = planImportSave(form, foods, [], sequentialIds('r'));
     expect(first.ok).toBe(false);
     if (first.ok) return;

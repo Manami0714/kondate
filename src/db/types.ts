@@ -39,6 +39,17 @@ export interface Food {
    * わからなければ null(そのときは今まで通りふつうの量にする)
    */
   gramsPerUnit: number | null;
+  /**
+   * ほかの数え方(例:キャベツ 1枚=0.1個、鶏もも肉 1枚=250g)。食材ごとに決める。
+   * URL の取り込み・昼食の口頭入力・レシートの読み取りで、辞書の単位に換算するのに使う
+   */
+  altUnits: AltUnit[];
+}
+
+/** ほかの数え方1つ:1{unit} = amount(辞書の単位での量) */
+export interface AltUnit {
+  unit: string;
+  amount: number;
 }
 
 /** 在庫。食材ごとに1行 */
