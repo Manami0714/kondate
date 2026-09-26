@@ -193,6 +193,21 @@ textarea {
   flex: 1;
 }
 
+/* 文字を折り返さないボタンの並び(幅の狭い iPhone でも1行に収まるよう、内側の余白を少し狭める) */
+.btn-row-nowrap > .btn {
+  white-space: nowrap;
+  padding: 0 10px;
+}
+
+/* 文字だけの控えめなボタン(見出しの右の「整理」など) */
+.btn-text {
+  border-color: transparent;
+  background: none;
+  color: var(--accent);
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
 /* ── 一覧 ── */
 .list {
   list-style: none;

@@ -71,9 +71,17 @@ export function StockScreen() {
     <>
       <div className="screen-header">
         <h1 className="screen-title">在庫</h1>
-        <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'pick' })}>
-          ＋ 追加
-        </button>
+        <div className="header-actions">
+          {/* 整理中は一覧の上の「やめる」で戻るので、見出しのボタンは出さない */}
+          {!tidy && (
+            <button type="button" className="btn btn-text" disabled={rows.length === 0} onClick={() => setTidy(new Set())}>
+              整理
+            </button>
+          )}
+          <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'pick' })}>
+            ＋ 追加
+          </button>
+        </div>
       </div>
       {tidy ? (
         <TidyBar
@@ -86,15 +94,12 @@ export function StockScreen() {
           onClose={() => setTidy(null)}
         />
       ) : (
-        <div className="btn-row" style={{ marginBottom: 12 }}>
+        <div className="btn-row btn-row-nowrap" style={{ marginBottom: 12 }}>
           <button type="button" className="btn" onClick={() => setMode({ type: 'paste' })}>
             貼り付けで追加
           </button>
           <button type="button" className="btn" onClick={() => setMode({ type: 'lunch' })}>
             昼に使った
-          </button>
-          <button type="button" className="btn" disabled={rows.length === 0} onClick={() => setTidy(new Set())}>
-            在庫を整理
           </button>
         </div>
       )}

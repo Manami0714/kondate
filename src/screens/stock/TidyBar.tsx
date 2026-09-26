@@ -17,10 +17,13 @@ export function TidyBar({ selectedCount, pastCount, busy, onSelectPast, onClear,
       <p className="field-hint" style={{ margin: 0 }}>
         在庫から消す食材を選んでください。
       </p>
-      <div className="btn-row">
+      {/* 幅の狭い iPhone でも文字が折り返さないよう、長いボタンは1段を使う */}
+      <div className="btn-row btn-row-nowrap">
         <button type="button" className="btn" disabled={pastCount === 0} onClick={onSelectPast}>
           目安を過ぎたものを選ぶ{pastCount > 0 ? `(${pastCount}品)` : ''}
         </button>
+      </div>
+      <div className="btn-row btn-row-nowrap">
         <button type="button" className="btn" disabled={selectedCount === 0} onClick={onClear}>
           選択を外す
         </button>
