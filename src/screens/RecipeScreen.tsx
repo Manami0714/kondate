@@ -10,6 +10,7 @@ import { hasMainFlags } from '../logic/planner/mainFoods';
 import { RecipeDetail } from './RecipeDetail';
 import { RecipeForm } from './RecipeForm';
 import { ImportSheet } from './recipe/ImportSheet';
+import { HelpButton } from '../components/HelpButton';
 
 type Mode =
   | { type: 'none' }
@@ -40,7 +41,10 @@ export function RecipeScreen() {
   return (
     <>
       <div className="screen-header">
-        <h1 className="screen-title">レシピ</h1>
+        <div className="screen-title-row">
+          <h1 className="screen-title">レシピ</h1>
+          <HelpButton screen="recipe" />
+        </div>
         <div className="header-actions">
           <button type="button" className="btn btn-text" onClick={() => setMode({ type: 'import' })}>
             URLから取り込み

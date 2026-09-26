@@ -40,7 +40,7 @@ type Step =
   /** 食材を選ぶ。unreadIndex があれば、その読めなかった言葉の食材を選ぶ */
   | { type: 'pick'; unreadIndex: number | null };
 
-/** 昼食の口頭入力:入力 → 確認 → 在庫から減らす */
+/** 献立以外で使った食材の口頭入力(「食材を使った」):入力 → 確認 → 在庫から減らす */
 export function LunchSheet({ foods, byId, stocks, onClose }: Props) {
   const [text, setText] = useState('');
   const [step, setStep] = useState<Step>({ type: 'input' });
@@ -130,9 +130,12 @@ export function LunchSheet({ foods, byId, stocks, onClose }: Props) {
 
   if (step.type === 'input') {
     return (
-      <Sheet title="昼に使った食材" onClose={onClose}>
+      <Sheet title="使った食材" onClose={onClose}>
         <div className="form">
-          <Field label="使った食材と量" hint="キーボードのマイクで話して入れられます。例:昼に卵2個とキャベツ半分使った">
+          <p className="muted" style={{ margin: 0 }}>
+            朝ごはんや昼ごはんなど、献立以外で使った食材を話してください
+          </p>
+          <Field label="使った食材と量" hint="キーボードのマイクで話して入れられます。例:朝に卵2個、昼にキャベツ半分使った">
             <textarea className="textarea" value={text} onChange={(e) => setText(e.target.value)} autoFocus />
           </Field>
           <button type="button" className="btn btn-primary btn-block" disabled={text.trim() === ''} onClick={read}>

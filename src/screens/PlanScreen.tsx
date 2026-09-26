@@ -10,6 +10,7 @@ import { FeedbackSheet } from './feedback/FeedbackSheet';
 import { MealSetView } from './plan/MealSetView';
 import { PlanWizard } from './plan/PlanWizard';
 import { RebuildWizard } from './plan/RebuildWizard';
+import { HelpButton } from '../components/HelpButton';
 
 /** 献立:予定中の献立セットと、新しい献立を作る流れ・キャンセルした日の作り直し */
 export function PlanScreen() {
@@ -51,7 +52,10 @@ export function PlanScreen() {
     return (
       <>
         <div className="screen-header">
-          <h1 className="screen-title">{rebuildDate ? `${formatDayLabel(rebuildDate)}の献立を作り直す` : '献立を作り直す'}</h1>
+          <div className="screen-title-row">
+            <h1 className="screen-title">{rebuildDate ? `${formatDayLabel(rebuildDate)}の献立を作り直す` : '献立を作り直す'}</h1>
+            <HelpButton screen="plan" />
+          </div>
           <button type="button" className="btn" onClick={() => void deleteRebuildDraft(db)}>
             やめる
           </button>
@@ -65,7 +69,10 @@ export function PlanScreen() {
     return (
       <>
         <div className="screen-header">
-          <h1 className="screen-title">献立を作る</h1>
+          <div className="screen-title-row">
+            <h1 className="screen-title">献立を作る</h1>
+            <HelpButton screen="plan" />
+          </div>
           <button type="button" className="btn" onClick={() => setCreating(false)}>
             {draft ? '閉じる(下書きは残る)' : 'やめる'}
           </button>
@@ -78,7 +85,10 @@ export function PlanScreen() {
   return (
     <>
       <div className="screen-header">
-        <h1 className="screen-title">献立</h1>
+        <div className="screen-title-row">
+          <h1 className="screen-title">献立</h1>
+          <HelpButton screen="plan" />
+        </div>
         <div className="header-actions">
           <button type="button" className="btn" onClick={() => setFeedbackOpen(true)}>
             感想を入力

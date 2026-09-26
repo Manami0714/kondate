@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseAmount } from './forms';
-import { amountToInput, formatAmount, formatStockAmount } from './format';
+import { amountToInput, formatAmount, formatStockAmount, STOCK_MOVE_REASON_LABELS } from './format';
 
 describe('量の表示', () => {
   it.each([
@@ -51,5 +51,12 @@ describe('在庫の量の表示', () => {
   it('重さがない食材と、g・ml の食材はそのまま', () => {
     expect(formatStockAmount(2, { unit: '袋', gramsPerUnit: null })).toBe('2袋');
     expect(formatStockAmount(300, { unit: 'g', gramsPerUnit: null })).toBe('300g');
+  });
+});
+
+describe('在庫の動きの理由の表示名', () => {
+  it('「昼食」は「献立以外」と表示し、ほかはそのまま', () => {
+    expect(STOCK_MOVE_REASON_LABELS['昼食']).toBe('献立以外');
+    expect(STOCK_MOVE_REASON_LABELS['整理で削除']).toBe('整理で削除');
   });
 });

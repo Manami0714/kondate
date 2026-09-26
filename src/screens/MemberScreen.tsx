@@ -6,6 +6,7 @@ import type { Member, MemberKind } from '../db/types';
 import { useFoods } from '../hooks/useFoods';
 import { formatPortion, portionOf } from '../logic/portion';
 import { MemberForm } from './MemberForm';
+import { HelpButton } from '../components/HelpButton';
 
 type Mode = { type: 'none' } | { type: 'edit'; member: Member | null };
 
@@ -50,7 +51,10 @@ export function MemberScreen() {
   return (
     <>
       <div className="screen-header">
-        <h1 className="screen-title">メンバー</h1>
+        <div className="screen-title-row">
+          <h1 className="screen-title">メンバー</h1>
+          <HelpButton screen="member" />
+        </div>
         <button type="button" className="btn btn-primary" onClick={() => setMode({ type: 'edit', member: null })}>
           ＋ 追加
         </button>

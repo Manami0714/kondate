@@ -14,6 +14,7 @@ import { isPastShelfLife } from '../logic/stock';
 import { LunchSheet } from './stock/LunchSheet';
 import { PasteSheet } from './stock/PasteSheet';
 import { TidyBar } from './stock/TidyBar';
+import { HelpButton } from '../components/HelpButton';
 
 type Mode =
   | { type: 'none' }
@@ -70,7 +71,10 @@ export function StockScreen() {
   return (
     <>
       <div className="screen-header">
-        <h1 className="screen-title">在庫</h1>
+        <div className="screen-title-row">
+          <h1 className="screen-title">在庫</h1>
+          <HelpButton screen="stock" />
+        </div>
         <div className="header-actions">
           {/* 整理中は一覧の上の「やめる」で戻るので、見出しのボタンは出さない */}
           {!tidy && (
@@ -99,7 +103,7 @@ export function StockScreen() {
             貼り付けで追加
           </button>
           <button type="button" className="btn" onClick={() => setMode({ type: 'lunch' })}>
-            昼に使った
+            食材を使った
           </button>
         </div>
       )}

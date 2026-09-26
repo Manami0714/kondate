@@ -20,6 +20,15 @@ describe('昼食の口頭入力', () => {
     expect(r.unread).toEqual([]);
   });
 
+  it('朝ごはん・お弁当などの言い方も取り除いて読む(「食材を使った」)', () => {
+    const r = parseLunch('朝に卵2個、お弁当にキャベツ半分使った', INITIAL_FOODS, stocks);
+    expect(r.items.map((i) => [i.foodId, i.amount])).toEqual([
+      ['egg', 2],
+      ['cabbage', 0.5],
+    ]);
+    expect(r.unread).toEqual([]);
+  });
+
   it('食材ごとのほかの数え方で換算する(キャベツ2枚=0.2個、鶏もも肉1枚=250g、大根5cm=0.15本)', () => {
     const r = parseLunch('キャベツ2枚と鶏もも肉1枚と大根5cm使った', INITIAL_FOODS, stocks);
     expect(r.items.map((i) => [i.foodId, i.amount, i.note])).toEqual([

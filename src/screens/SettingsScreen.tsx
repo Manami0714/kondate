@@ -5,6 +5,8 @@ import { IgnoredWordsSection } from './settings/IgnoredWordsSection';
 import { FoodDictionarySection } from './settings/FoodDictionarySection';
 import { HouseholdSection } from './settings/HouseholdSection';
 import { PantrySection } from './settings/PantrySection';
+import { HelpButton } from '../components/HelpButton';
+import { UsageSection } from './settings/UsageSection';
 
 export function SettingsScreen() {
   const foodData = useFoods();
@@ -13,8 +15,12 @@ export function SettingsScreen() {
   return (
     <>
       <div className="screen-header">
-        <h1 className="screen-title">設定</h1>
+        <div className="screen-title-row">
+          <h1 className="screen-title">設定</h1>
+          <HelpButton screen="settings" />
+        </div>
       </div>
+      <UsageSection />
       <PantrySection foods={foodData.foods} />
       <FoodDictionarySection foods={foodData.foods} />
       <HouseholdSection />

@@ -113,23 +113,40 @@ textarea {
 }
 
 /* ── 見出し ── */
+/*
+ * 見出し(題名と「?」)とボタンを1行に並べる。幅が足りないときはボタンを次の行に送り、
+ * 題名もボタンも押しつぶさない(「献/立」「閉じ/る」のような1文字ずつの折り返しを防ぐ)
+ */
 .screen-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin: 8px 0 12px;
 }
 
-/* 見出しの右に並べるボタン */
+/* 見出しの右に並べるボタン(次の行に送られたときも右に寄せる) */
 .header-actions {
   display: flex;
   gap: 8px;
+  margin-left: auto;
+}
+
+.screen-header .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.screen-header > .btn {
+  margin-left: auto;
 }
 
 .screen-title {
   font-size: 24px;
   margin: 0;
+  /* 1行に収まらない長い題名(「9/28(月)の献立を作り直す」)だけ折り返す */
+  overflow-wrap: anywhere;
 }
 
 .section-title {
@@ -328,6 +345,28 @@ button.list-item {
 .textarea {
   min-height: 120px;
   resize: vertical;
+}
+
+/*
+ * 日付の欄:iPhone の Safari は日付の欄を中身の幅で広げ、画面が左右にスクロールしてしまうので、
+ * 標準の見た目を外して、ほかの欄と同じ幅(親の幅いっぱい)に収める
+ */
+.input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+
+.input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* 欄のまとまりが中身の幅で広がらないようにする */
+.field {
+  min-width: 0;
 }
 
 .input-with-unit {
@@ -615,4 +654,49 @@ button.list-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* ── ヘルプ ── */
+/* 見出しと「?」ボタンの並び(ボタンは縮めない) */
+.screen-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.btn-help {
+  flex-shrink: 0;
+  width: 30px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 15px;
+}
+
+.help-content {
+  display: grid;
+  gap: 8px;
+}
+
+.help-points {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.faq {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.faq dt {
+  font-weight: 600;
+}
+
+.faq dd {
+  margin: 4px 0 0;
 }

@@ -1,5 +1,5 @@
 // 画面に出す文字の整形(純粋関数)
-import type { Food } from '../db/types';
+import type { Food, StockMoveReason } from '../db/types';
 
 const FRACTIONS: [number, string][] = [
   [0.25, '1/4'],
@@ -63,3 +63,16 @@ export function formatStockAmount(amount: number, food: Pick<Food, 'unit' | 'gra
   if (food.gramsPerUnit === null || food.gramsPerUnit <= 0 || DECIMAL_UNITS.has(food.unit)) return base;
   return `${base}(約${Math.round(amount * food.gramsPerUnit)}g)`;
 }
+
+/**
+ * 在庫の動きの理由の表示名。データの値は変えずに、画面ではこの名前を使う。
+ * 「昼食」は朝ごはん・お弁当なども含む「献立以外で使った」分なので、「献立以外」と表示する
+ */
+export const STOCK_MOVE_REASON_LABELS: Record<StockMoveReason, string> = {
+  購入: '購入',
+  夕飯: '夕飯',
+  昼食: '献立以外',
+  手直し: '手直し',
+  キャンセルで戻す: 'キャンセルで戻す',
+  整理で削除: '整理で削除',
+};

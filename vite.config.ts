@@ -7,6 +7,12 @@ export default defineConfig({
   base: BASE_PATH,
   plugins: [
     react(),
+    // index.html の %APP_NAME% %APP_SHORT_NAME% に、src/config/app.ts のアプリ名を入れる(名前を1か所で決めるため)
+    {
+      name: 'app-name',
+      transformIndexHtml: (html: string) =>
+        html.replaceAll('%APP_SHORT_NAME%', APP_SHORT_NAME).replaceAll('%APP_NAME%', APP_NAME),
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
